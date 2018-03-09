@@ -16,50 +16,52 @@ class HTTPClient {
         //Socket clientSocket = new Socket(args[1], Integer.valueOf(args[2]));
         DataOutputStream outToServer = new DataOutputStream(clientSocket.getOutputStream());
         BufferedReader inFromServer = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-
         //String sentence = inFromUser.readLine();
         //outToServer.writeBytes(args[0] + " " + sentence + "\n");
         outToServer.writeBytes("GET /index.html HTTP/1.1 \n");
         outToServer.writeBytes("\n");
         boolean ended = false;
+        String htmlInput = "";
         while (!ended) {
             String line = inFromServer.readLine();
-            System.out.println(line);
+            //System.out.println(line);
             if (line.equals("</BODY></HTML>")) {
                 ended = true;
             }
+            htmlInput += line;
         }
+        System.out.println(htmlInput);
 
         int titlestart=0, titleend=0, bodystart=0, bodyend=0;
-        for (int i=0; i < htmlString.toCharArray().length - 8; i++) {
-            Character c = ((Character)htmlString.charAt(i));
+        for (int i=0; i < htmlInput.toCharArray().length - 9; i++) {
+            Character c = ((Character)htmlInput.charAt(i));
 
             if (c.equals('<')) {
-                //System.out.println("< found" + htmlString.substring(i+1,i+6));
-                if (htmlString.substring(i+1,i+7).equals("title>")) {
+                System.out.println("< found"+" "+htmlInput.substring(i+1,i+7));
+                if (htmlInput.substring(i+1,i+7).equals("TITLE>")) {
                     titlestart = i+7;
-                    System.out.println(htmlString.charAt(titlestart));
+                    System.out.println(htmlInput.charAt(titlestart));
                 }
             }
             if (c.equals('<')) {
-                //System.out.println("< found");
-                if (htmlString.substring(i+1,i+8).equals("/title>")) {
+                System.out.println("< found");
+                if (htmlInput.substring(i+1,i+8).equals("/TITLE>")) {
                     titleend = i-1;
-                    System.out.println(htmlString.charAt(titleend));
+                    System.out.println(htmlInput.charAt(titleend));
                 }
             }
             if (c.equals('<')) {
-                //System.out.println("< found");
-                if (htmlString.substring(i+1,i+6).equals("body>")) {
+                System.out.println("< found");
+                if (htmlInput.substring(i+1,i+6).equals("BODY>")) {
                     bodystart = i+6;
-                    System.out.println(htmlString.charAt(bodystart));
+                    System.out.println(htmlInput.charAt(bodystart));
                 }
             }
             if (c.equals('<')) {
-                //System.out.println("< found");
-                if (htmlString.substring(i+1,i+7).equals("/body>")) {
+                System.out.println("< found");
+                if (htmlInput.substring(i+1,i+7).equals("/BODY>")) {
                     bodyend = i-1;
-                    System.out.println(htmlString.charAt(bodyend));
+                    System.out.println(htmlInput.charAt(bodyend));
                 }
             }
         }
@@ -69,8 +71,9 @@ class HTTPClient {
 
         File htmlTemplateFile = new File("template.html");
         String htmlString = FileUtils.readFileToString(htmlTemplateFile);
-        String title = htmlString.substring(titlestart, titleend);
-        String body = htmlString.substring(bodystart, bodyend);
+        System.out.println(htmlInput.length()+" "+titlestart+" "+titleend);
+        String title = htmlInput.substring(titlestart, titleend);
+        String body = htmlInput.substring(bodystart, bodyend);
         htmlString = htmlString.replace("$title", title);
         htmlString = htmlString.replace("$body", body);
         File newHtmlFile = new File("new.html");
