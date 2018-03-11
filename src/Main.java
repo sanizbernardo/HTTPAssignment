@@ -58,18 +58,16 @@ class HTTPClient {
                 }
             }
         }
-        //System.out.println(titlestart + " " + titleend + " "+bodystart+" "+ bodyend);
 
 
 
-        File htmlTemplateFile = new File("template.html");
+        File htmlTemplateFile = new File("src/template.html");
         String htmlString = FileUtils.readFileToString(htmlTemplateFile);
-        //System.out.println(htmlInput.length()+" "+titlestart+" "+titleend);
         String title = htmlInput.substring(titlestart, titleend);
         String body = htmlInput.substring(bodystart, bodyend);
         htmlString = htmlString.replace("$title", title);
         htmlString = htmlString.replace("$body", body);
-        File newHtmlFile = new File("new.html");
+        File newHtmlFile = new File("src/new.html");
         FileUtils.writeStringToFile(newHtmlFile, htmlString);
 
 
