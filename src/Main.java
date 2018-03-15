@@ -83,54 +83,19 @@ class HTTPClient {
             Post(path,port);
         }
 
-        /*
-         * The input stream reads bytes. The following will code will check the available bytes in the input stream.
-         * If it is larger than the initialized bytes array than we will chop the inputstream data up in smaller parts
-         * of 100 bytes.
-         */
 
-
-
-
-
+         //Read from input stream to check amount of data.
         inputStream.read();
-        System.out.println("Available ervoor: "+inputStream.available()   );
+         //Make new byte array with the size of the data and read all the data from input stream to byte array
         int size = inputStream.available();
         bytes = new byte[size];
-        int len = inputStream.read(bytes, 0, size);
-        System.out.println("Available erna: "+inputStream.available()   );
+        inputStream.read(bytes, 0, size);
 
-        System.out.println("len: "+len);
+        // Cast the bytes read from the input stream to String
+        String reqReponse = new String(bytes, StandardCharsets.UTF_8);
+
+
         //
-               /*
-        if (inputStream.available() < 100) {
-            System.out.println("Available: "+inputStream.available());
-            inputStream.read(bytes);
-        }
-
-        else {
-            System.out.println("Not Available "+inputStream.available());
-            int j = 0;
-            String hundredbyte;
-            System.out.println("Modulo: "+(inputStream.available() % 100));
-            for (int i = 0;i < (inputStream.available() % 100) ; i++) {
-                System.out.println("Not Available "+inputStream.available());
-                System.out.println("I: "+i);
-                inputStream.read(bytes, i * 100, 100);
-                hundredbyte = new String(bytes, StandardCharsets.UTF_8);
-                byteString += hundredbyte;
-                j += 1;
-                bytes = new byte[100];
-            }
-            inputStream.read(bytes, (j + 1) * 100, inputStream.available());
-            byteString += new String(bytes, StandardCharsets.UTF_8);
-        }
-        System.out.println("ByteString: "+byteString);  */
-/*
-        //byte[] bufferText = IOUtils.toByteArray(inputStream);
-        //inputStream.read(bufferText);
-        String str = new String(bytes, StandardCharsets.UTF_8);
-        //System.out.println("string: "+str);
 
         while (!ended) {
             String line = inFromServer.readLine();
@@ -206,7 +171,7 @@ class HTTPClient {
         File newHtmlFile = new File("src/new.html");
         FileUtils.writeStringToFile(newHtmlFile, htmlString);
 
-*/
+
         clientSocket.close();
     }
 
