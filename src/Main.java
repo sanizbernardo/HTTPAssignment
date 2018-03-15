@@ -18,12 +18,13 @@ class HTTPClient {
          * Variables
          */
         boolean ended = false;
-        String htmlInput = "";
+        String htmlInput = "H";
         String substr = "";
         String byteString= "";
 
         // Creating byte array for incoming bytes
-        byte[] bytes;
+        byte[] bytes= new byte[100];
+        byte [] restBytes;
 
         // Creating new html template
         File htmlTemplateFile = new File("src/template.html");
@@ -62,9 +63,7 @@ class HTTPClient {
 
         // Incoming HTTP command from request is GET, so calling get method with
         // correct path and data output stream
-        System.out.println("HttpCommand: "+HTTPCommand);
         if (HTTPCommand.equals("GET")) {
-            System.out.println("Test");
             Get(path,outToServer);
         }
 
@@ -83,20 +82,95 @@ class HTTPClient {
             Post(path,port);
         }
 
-
-         //Read from input stream to check amount of data.
+        //Read from input stream to check amount of data.
         inputStream.read();
-         //Make new byte array with the size of the data and read all the data from input stream to byte array
-        int size = inputStream.available();
-        bytes = new byte[size];
-        inputStream.read(bytes, 0, size);
+        int dataLength = inputStream.available();
+        System.out.println("dataLength: "+dataLength);
+        String hundredbyte;
 
+        while (inputStream.available() > 100) {
+            inputStream.read(bytes, 0, 100);
+            hundredbyte = new String(bytes, StandardCharsets.UTF_8);
+            byteString += hundredbyte;
+            bytes = new byte[100];
+
+        }
+        int rest = inputStream.available();
+        restBytes = new byte[rest];
+        System.out.println("Restbyte: "+restBytes.length);
+        inputStream.read(restBytes, 0, rest);
+        hundredbyte = new String(restBytes, StandardCharsets.UTF_8);
+        byteString += hundredbyte;
+        htmlInput += byteString;
+
+
+
+/*
+        if (inputStream.available() < 100) {
+            System.out.println("Available: "+inputStream.available());
+            inputStream.read(bytes);
+        }
+        else {
+            System.out.println("Not Available " + inputStream.available());
+            int j = 0;
+            int dataLength1 = inputStream.available();
+            System.out.println("dataLength 2: "+dataLength1);
+            int rest = inputStream.available()%bytes.length;
+            int dataLength2 = inputStream.available();
+            System.out.println("dataLength3: "+dataLength2);
+            int bound = (inputStream.available()-rest)/(bytes.length);
+
+            while (j < bound) {
+                //System.out.println("Loop print 1");
+                inputStream.read(bytes, 0, 100);
+                //System.out.println("Loop print 2");
+
+                j += 1;
+                System.out.println(j);
+                //System.out.println("Loop print 3");
+                //System.out.println("HundredByte: "+hundredbyte);
+
+            }
+            restBytes = new byte[rest];
+            System.out.println("Restbyte: "+restBytes.length);
+            inputStream.read(restBytes, 0, rest);
+            hundredbyte = new String(restBytes, StandardCharsets.UTF_8);
+            System.out.println("HUNDREDSTRING: "+hundredbyte);
+            byteString += hundredbyte;
+
+        }
+        System.out.println("----------------------------------------------");
+        htmlInput += byteString;
+        System.out.println("********************************************************");*/
+/*
+            System.out.println("Modulo: "+(inputStream.available() % 100));
+            for (int i = 0;i < (inputStream.available() % 100) ; i++) {
+                System.out.println("Not Available "+inputStream.available());
+                System.out.println("I: "+i);
+                inputStream.read(bytes, i * 100, 100);
+                hundredbyte = new String(bytes, StandardCharsets.UTF_8);
+                byteString += hundredbyte;
+                j += 1;
+                bytes = new byte[100];
+            }
+            inputStream.read(bytes, (j + 1) * 100, inputStream.available());
+            byteString += new String(bytes, StandardCharsets.UTF_8);
+        }*/
+        System.out.println("ByteString: "+htmlInput);
+
+         //Make new byte array with the size of the data and read all the data from input stream to byte array
+        /*int size = inputStream.available();
+        System.out.println(size);
+        byte [] bytes = inputStream.readAllBytes();;//new byte[size];
+        System.out.println(inputStream.read(bytes, 0, size));
+        int len = inputStream.read(bytes, 0, size);
+        System.out.println(len);
         // Cast the bytes read from the input stream to String
         String reqReponse = new String(bytes, StandardCharsets.UTF_8);
-
+        System.out.println(reqReponse);*/
 
         //
-
+/*
         while (!ended) {
             String line = inFromServer.readLine();
             System.out.println(line);
@@ -171,7 +245,7 @@ class HTTPClient {
         File newHtmlFile = new File("src/new.html");
         FileUtils.writeStringToFile(newHtmlFile, htmlString);
 
-
+*/
         clientSocket.close();
     }
 
@@ -179,6 +253,7 @@ class HTTPClient {
         outToServer.writeBytes("GET /index.html HTTP/1.1\n");
         outToServer.writeBytes("Host: "+path+" \n");
         outToServer.writeBytes("\n");
+        outToServer.flush();
     }
 
     public static void Head(String path, int port) {
