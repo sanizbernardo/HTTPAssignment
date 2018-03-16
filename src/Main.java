@@ -25,7 +25,7 @@ class HTTPClient {
         boolean ended = false;
         String substr = "";
         String byteString= "H";
-        String head;
+        String fullText;
         String htmlText;
 
         // Creating byte array for incoming bytes
@@ -96,34 +96,29 @@ class HTTPClient {
         inputStream.read();
 
         //Calling up the method to cast bytes of input stream to string
-       htmlText = byteToString(bytes,inputStream);
+       fullText = byteToString("H",bytes,inputStream);
 
        //Sometimes the inputStream.available() does not see all the data immediately, so we check if we have all the
        //data for our html file with ends in </HTML> or </html>, if the String does not contain one of these two elements
        // then we keep converting bytes of inputStream to String and add the result onto the existing string until it contains one
        // of the two html elements.
         if (HTTPCommand.equals("GET")) {
-            while (!(htmlText.contains("</HTML>") || htmlText.contains("</html>"))) {
-                htmlText += byteToString(bytes, inputStream);
+            while (!(fullText.contains("</HTML>") || fullText.contains("</html>"))) {
+                fullText += byteToString("",bytes, inputStream);
             }
         }
 
+        //Find the html text part of the response from the HTTP Command
+        htmlText = searchForHtml(fullText);
 
-       System.out.println(htmlText);
         /*
-        while (!ended) {
-            String line = inFromServer.readLine();
-            System.out.println(line);
-            if (line.length() > 6) {
-                substr = line.substring(line.length() - 7, line.length());
-            }
-            if (substr.equals("</html>") || substr.equals("</HTML>")) {
-                ended = true;
-            }
-            htmlInput += line;
-        }
-        //System.out.println(htmlInput);
-*/
+         * Parsing
+         */
+
+        //This part finds the title part, body part and the images of the html text part
+        //For the title part it looks for the title tags and remembers the start and end index of the title.
+        //For the body part it works the same as the title part.
+        //For the images this function searches for the image tags and remembers the name + extensions of the found images.
         int titlestart=0, titleend=0, bodystart=0, bodyend=0;
         for (int i=0; i < htmlText.toCharArray().length - 9; i++) {
             Character c = (htmlText.charAt(i));
@@ -161,7 +156,11 @@ class HTTPClient {
             }
         }
         System.out.println("Image: "+images+" length: "+images.size());
-/*
+
+        /*
+         * Convert bytes to images
+         */
+
         if (images.size() != 0) {
             ImageInputStream iis = ImageIO.createImageInputStream(inputStream);
             outToServer.writeBytes("GET /faq.png HTTP/1.1\n");
@@ -181,15 +180,19 @@ class HTTPClient {
                 //BufferedImage bImageFromConvert = ImageIO.read(inputStream);
                 //ImageIO.write(bImageFromConvert, "jpg", new File(
                  //       "c:/new-darksouls.jpg"));
-                /*
+
                 System.out.println("Buffer: "+buffer.length);
                 ByteArrayInputStream bis = new ByteArrayInputStream(buffer);
                 BufferedImage bImage2 = ImageIO.read(bis);
                 System.out.println("bImage2: "+bImage2);
                 ImageIO.write(bImage2, "jpg", new File("output.jpg") );
             }
-        }*/
-        searchForHeader(htmlText);
+        }
+
+        //We print the header of the response of the HTTP Command to the terminal:
+        System.out.println(searchForHeader(fullText));
+
+
         String htmlString = FileUtils.readFileToString(htmlTemplateFile);
         String title = htmlText.substring(titlestart, titleend);
         String body = htmlText.substring(bodystart, bodyend);
@@ -242,14 +245,14 @@ class HTTPClient {
      * to string. If the available data in the input stream is smaller than 100 bytes, it will take the
      * remaining bytes left in the input stream and turn those remaining bytes into a string and add it onto the
      * longer string that was created during the while loop.
+     * @param byteString
      * @param bytes
      * @param inputStream
      * @return
      * @throws IOException
      */
-    public static String byteToString(byte[] bytes,InputStream inputStream) throws IOException
+    public static String byteToString(String byteString,byte[] bytes,InputStream inputStream) throws IOException
     {
-        String byteString = "H";
         byte[] restBytes;
         //Continue doing so until the amount of data in input stream is less than 100 bytes
         while (inputStream.available() > 100) {
@@ -268,6 +271,13 @@ class HTTPClient {
 
     }
 
+    /**
+     * This method searches for the header of response of the HTTP Command, the response contains
+     * a header part and a http text part.
+     * @param fullText
+     * @return
+     */
+
     public static String searchForHeader(String fullText) {
         String header = "";
         for (int i=0;i <fullText.length();i++) {
@@ -276,19 +286,26 @@ class HTTPClient {
                 break;
             }
         }
-        System.out.println("Header: "+header);
         return header;
     }
 
-    public static String searchForHtml(String fullText, int contentLength)
+    /**
+     * This method searches for the html text of response of the HTTP Command, the response contains
+     * a header part and a http text part.
+     * @param fullText
+     * @return
+     */
+
+    public static String searchForHtml(String fullText)
     {
         String html = "";
-        for (int i=0;i <fullText.length();++) {
-            if (fullText.substring(0,i).contains("<HTML>") || fullText.substring(0,i).contains("<html>")) {
-                html =  fullText.substring(i-5,contentLength);
+        for (int i=0;i <fullText.length();i++) {
+            if (fullText.substring(0, i).contains("<HTML>") || fullText.substring(0, i).contains("<html>")) {
+                html = fullText.substring(i - 6, fullText.length());
                 break;
+            }
         }
-        return null;
+        return html;
     }
 
 }
