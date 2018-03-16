@@ -9,11 +9,11 @@ class TCPServer
 {
     public static void main(String argv[]) throws Exception
     {
-        ServerSocket welcomeSocket = new ServerSocket(6789);
+        ServerSocket welcomeSocket = new ServerSocket(80);
+        int i = 0;
         while(true)
         {
             Socket connectionSocket = welcomeSocket.accept();
-            int i = 0;
             if (connectionSocket != null)
             {
                 Handler request = new Handler(connectionSocket);
@@ -35,47 +35,58 @@ class TCPServer
             try {
                 BufferedReader inFromClient = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 DataOutputStream outToClient = new DataOutputStream(socket.getOutputStream());
-                String request = inFromClient.readLine();
-                String[] args = request.split("\\s+");
-                if (args[0].equals("HEAD")) {
-                    confirm(outToClient);
-                    head(outToClient);
-                } else if (args[0].equals("GET")) {
-                    confirm(outToClient);
-                    get(outToClient);
-                } else if (args[0].equals("PUT")) {
-                    confirm(outToClient);
-                    put();
-                } else if (args[0].equals("POST")) {
-                    confirm(outToClient);
-                    post();
-                } else {
-                    outToClient.writeBytes("400 Bad Request");
+
+                outToClient.writeBytes("Connected\n");
+
+                boolean requestcomplete = false;
+                String request = "";
+
+                while (!requestcomplete) {
+                    String input = inFromClient.readLine();
+                    if (input.equals("")) {
+                        requestcomplete = true;
+                    }
+                    request += input;
+                    request += " ";
+                }
+
+                String[] words = request.split("\\s+");
+                String method = words[0];
+                String uri = words[1];
+                String httpversion = words[2];
+
+                switch (method) {
+                    case "HEAD":
+                        confirm(outToClient, httpversion);
+                        head(outToClient, request);
+                        break;
+                    case "GET":
+                        confirm(outToClient, httpversion);
+                        get(outToClient, request);
+                        break;
+                    case "PUT":
+                        confirm(outToClient, httpversion);
+                        put();
+                        break;
+                    case "POST":
+                        confirm(outToClient, httpversion);
+                        post();
+                        break;
+                    default:
+                        outToClient.writeBytes("400 Bad Request");
                 }
             } catch(IOException e) {
-                //outToClient.writeBytes("500 Server Error");
+
             }
 
         }
 
-        private void confirm(DataOutputStream out) throws  IOException {
-            out.writeBytes("HTTP /1.1 200 OK");
+        private void confirm(DataOutputStream out, String httpversion) throws  IOException {
+            out.writeBytes(httpversion + "200 OK\n");
         };
 
-        private void head(DataOutputStream out) throws  IOException {
-            File htmlFile = new File("src/webpage.html");
-            String htmlString = FileUtils.readFileToString(htmlFile);
-
-            DateTimeFormatter date = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
-            LocalDateTime now = LocalDateTime.now();
-
-            out.writeBytes("Content-Type: ");
-            out.writeBytes("Content-Length: " + htmlString.length());
-            out.writeBytes("Date: " + date.format(now));
-        };
-
-        private void get(DataOutputStream out) throws  IOException {
-            File htmlFile = new File("src/webpage.html");
+        private void head(DataOutputStream out, String request) throws  IOException {
+            File htmlFile = new File("src/index.html");
             String htmlString = FileUtils.readFileToString(htmlFile);
 
             DateTimeFormatter date = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
@@ -83,7 +94,21 @@ class TCPServer
 
             out.writeBytes("Content-Type: " + "\n");
             out.writeBytes("Content-Length: " + htmlString.length() + "\n");
-            out.writeBytes("Date: " + date.format(now) + "\n \n");
+            out.writeBytes("Date: " + date.format(now) + "\n");
+            out.writeBytes("\n");
+        };
+
+        private void get(DataOutputStream out, String request) throws  IOException {
+            File htmlFile = new File("src/index.html");
+            String htmlString = FileUtils.readFileToString(htmlFile);
+
+            DateTimeFormatter date = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+            LocalDateTime now = LocalDateTime.now();
+
+            out.writeBytes("Content-Type: " + "\n");
+            out.writeBytes("Content-Length: " + htmlString.length() + "\n");
+            out.writeBytes("Date: " + date.format(now) + "\n");
+            out.writeBytes("\n");
             out.writeBytes(htmlString);
         };
 

@@ -1,7 +1,4 @@
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
 
 import javax.imageio.ImageIO;
 import javax.imageio.stream.ImageInputStream;
@@ -30,7 +27,7 @@ class HTTPClient {
 
         // Creating byte array for incoming bytes
         byte[] bytes= new byte[100];
-        byte [] restBytes;
+        byte[] restBytes;
 
         // Creating new html template
         File htmlTemplateFile = new File("src/template.html");
