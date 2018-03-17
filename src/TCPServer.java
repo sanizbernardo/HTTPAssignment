@@ -4,6 +4,8 @@ import java.io.*;
 import java.net.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
 class TCPServer
 {
@@ -39,59 +41,55 @@ class TCPServer
                 outToClient.writeBytes("Connected\n");
 
                 boolean requestcomplete = false;
-                String request = "";
+                List<String> input = new ArrayList<String>();
 
                 while (!requestcomplete) {
-                    String input = inFromClient.readLine();
-                    if (input.equals("")) {
+                    String inputline = inFromClient.readLine();
+                    if (inputline.equals("")) {
                         requestcomplete = true;
                     }
-                    request += input;
-                    request += " ";
+                    input.add(inputline);
                 }
 
-                /*
-                String[] words = request.split("\\s+");
-                String method = words[0];
-                String uri = words[1];
-                String httpversion = words[2];
+                String[] lines = new String[input.size()];
+                input.toArray(lines);
 
-                switch (method) {
+                String[] requestline = lines[0].split("\\s+");
+
+                DateTimeFormatter format = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+                LocalDateTime now = LocalDateTime.now();
+                String date = format.format(now);
+
+                File f = new File("src" + requestline[1]);
+                if(!f.exists() || f.isDirectory()) {
+                    outToClient.writeBytes("404 Not found");
+                    //Throw error
+                }
+
+                switch (requestline[0]) {
                     case "HEAD":
-                        confirm(outToClient, httpversion);
-                        head(outToClient, request);
+                        confirm(outToClient, requestline[2]);
+                        head(outToClient, lines, date);
                         break;
                     case "GET":
-                        confirm(outToClient, httpversion);
-                        get(outToClient, request);
+                        confirm(outToClient, requestline[2]);
+                        get(outToClient, lines, date);
                         break;
                     case "PUT":
-                        confirm(outToClient, httpversion);
-                        put();
+                        confirm(outToClient, requestline[2]);
+                        put(outToClient, lines, date);
                         break;
                     case "POST":
-                        confirm(outToClient, httpversion);
-                        post();
+                        confirm(outToClient, requestline[2]);
+                        post(outToClient, lines, date);
+                        break;
+                    case "DELETE":
+                        confirm(outToClient, requestline[2]);
+                        delete(outToClient, lines, date);
                         break;
                     default:
                         outToClient.writeBytes("400 Bad Request");
-                }
-                */
-
-                if (request.substring(0, 3).equals("HEAD")) {
-                    confirm(outToClient);
-                    head(outToClient, request);
-                } else if (request.substring(0, 3).equals("GET")) {
-                    confirm(outToClient);
-                    get(outToClient, request);
-                } else if (request.substring(0, 3).equals("PUT")) {
-                    confirm(outToClient);
-                    put();
-                } else if (request.substring(0, 3).equals("POST")) {
-                    confirm(outToClient);
-                    post();
-                } else {
-                    outToClient.writeBytes("400 Bad Request");
+                        break;
                 }
             } catch(IOException e) {
 
@@ -99,43 +97,63 @@ class TCPServer
 
         }
 
-        private void confirm(DataOutputStream out) throws  IOException {
-            out.writeBytes("HTTP/1.1 200 OK\n");
+        private boolean isValidRequest(String[] request) {
+            boolean b = true;
+            if (request.length != 3 || !request[2].equals("HTTP/1.1")) {
+                b = false;
+            }
+            return  b;
         };
 
-        private void head(DataOutputStream out, String request) throws  IOException {
+        private void confirm(DataOutputStream out, String httpversion) throws  IOException {
+            out.writeBytes(httpversion + " 200 OK\n");
+        };
+
+        private void head(DataOutputStream out, String[] request, String date) throws  IOException {
+            System.out.println("Head detected");
             File htmlFile = new File("src/index.html");
             String htmlString = FileUtils.readFileToString(htmlFile);
 
-            DateTimeFormatter date = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
-            LocalDateTime now = LocalDateTime.now();
-
             out.writeBytes("Content-Type: " + "\n");
             out.writeBytes("Content-Length: " + htmlString.length() + "\n");
-            out.writeBytes("Date: " + date.format(now) + "\n");
+            out.writeBytes("Date: " + date + "\n");
             out.writeBytes("\n");
         };
 
-        private void get(DataOutputStream out, String request) throws  IOException {
+        private void get(DataOutputStream out, String[] request, String date) throws  IOException {
+            System.out.println("Get detected");
             File htmlFile = new File("src/index.html");
             String htmlString = FileUtils.readFileToString(htmlFile);
 
-            DateTimeFormatter date = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
-            LocalDateTime now = LocalDateTime.now();
-
             out.writeBytes("Content-Type: " + "\n");
             out.writeBytes("Content-Length: " + htmlString.length() + "\n");
-            out.writeBytes("Date: " + date.format(now) + "\n");
+            out.writeBytes("Date: " + date + "\n");
             out.writeBytes("\n");
             out.writeBytes(htmlString);
         };
 
-        private void put() {
+        private void put(DataOutputStream out, String[] request, String date) throws  IOException {
+            System.out.println("Put detected");
+            out.writeBytes("Date: " + date + "\n");
+            out.writeBytes("\n");
+        };
+
+        private void post(DataOutputStream out, String[] request, String date) throws  IOException {
+            System.out.println("Post detected");
+            out.writeBytes("Date: " + date + "\n");
+            out.writeBytes("\n");
 
         };
 
-        private void post() {
+        private  void delete(DataOutputStream out, String[] request, String date) throws  IOException {
+            File htmlFile = new File("src/deletemessage.html");
+            String htmlString = FileUtils.readFileToString(htmlFile);
 
+            System.out.println("Delete detected");
+            out.writeBytes("Date: " + date + "\n");
+            out.writeBytes("\n");
+            out.writeBytes(htmlString);
         };
+
     }
 }
