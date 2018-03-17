@@ -50,6 +50,7 @@ class TCPServer
                     request += " ";
                 }
 
+                /*
                 String[] words = request.split("\\s+");
                 String method = words[0];
                 String uri = words[1];
@@ -75,14 +76,31 @@ class TCPServer
                     default:
                         outToClient.writeBytes("400 Bad Request");
                 }
+                */
+
+                if (request.substring(0, 3).equals("HEAD")) {
+                    confirm(outToClient);
+                    head(outToClient, request);
+                } else if (request.substring(0, 3).equals("GET")) {
+                    confirm(outToClient);
+                    get(outToClient, request);
+                } else if (request.substring(0, 3).equals("PUT")) {
+                    confirm(outToClient);
+                    put();
+                } else if (request.substring(0, 3).equals("POST")) {
+                    confirm(outToClient);
+                    post();
+                } else {
+                    outToClient.writeBytes("400 Bad Request");
+                }
             } catch(IOException e) {
 
             }
 
         }
 
-        private void confirm(DataOutputStream out, String httpversion) throws  IOException {
-            out.writeBytes(httpversion + "200 OK\n");
+        private void confirm(DataOutputStream out) throws  IOException {
+            out.writeBytes("HTTP/1.1 200 OK\n");
         };
 
         private void head(DataOutputStream out, String request) throws  IOException {
