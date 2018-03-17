@@ -9,6 +9,7 @@ import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.regex.Pattern;
 
 class HTTPClient {
 
@@ -152,37 +153,18 @@ class HTTPClient {
                 images.add(htmlText.substring(i+10,imageEnd));
             }
         }
-        System.out.println("Image: "+images+" length: "+images.size());
 
         /*
          * Convert bytes to images
          */
 
         if (images.size() != 0) {
-            ImageInputStream iis = ImageIO.createImageInputStream(inputStream);
-            outToServer.writeBytes("GET /faq.png HTTP/1.1\n");
-            outToServer.writeBytes("Host: tinyos.net \n");
-            outToServer.writeBytes("\n");
-            byte[] buffer = new byte[4096];
-            BufferedImage image = ImageIO.read(iis);
-            System.out.println("Image: "+image);
-            JFrame frame = new JFrame();
-            JLabel label = new JLabel(new ImageIcon(image));
-            frame.getContentPane().add(label, BorderLayout.CENTER);
-            frame.pack();
-            frame.setVisible(true);
-            for (int i=0;i <images.size();i++) {
+            for (String img: images) {
+                getImage(img, path, inputStream, outToServer);
+                //clientSocket = new Socket(path,port);
+                //inputStream = clientSocket.getInputStream();
+                //outToServer = new DataOutputStream(clientSocket.getOutputStream());
 
-                //inputStream.read(buffer);
-                //BufferedImage bImageFromConvert = ImageIO.read(inputStream);
-                //ImageIO.write(bImageFromConvert, "jpg", new File(
-                 //       "c:/new-darksouls.jpg"));
-
-                System.out.println("Buffer: "+buffer.length);
-                ByteArrayInputStream bis = new ByteArrayInputStream(buffer);
-                BufferedImage bImage2 = ImageIO.read(bis);
-                System.out.println("bImage2: "+bImage2);
-                ImageIO.write(bImage2, "jpg", new File("output.jpg") );
             }
         }
 
@@ -303,6 +285,89 @@ class HTTPClient {
             }
         }
         return html;
+    }
+
+    public static void getImage(String image, String host, InputStream inputStream,DataOutputStream outToServer) throws IOException {
+        int ava = 0;
+        String contentLenString = "";
+        String contentLen = "";
+        boolean con = false;
+
+        outToServer.writeBytes("GET /"+image+" HTTP/1.1\n");
+        outToServer.writeBytes("Host: "+host+"\n");
+        outToServer.writeBytes("\n");
+        byte [] bytes = new byte [1];
+        inputStream.read(bytes);
+        while (looksLikeUTF8(bytes)) {
+            if (new String(bytes,StandardCharsets.UTF_8).equals("C") && !con) {
+                contentLenString += new String(bytes, StandardCharsets.UTF_8);
+                con = true;
+            }
+            else if (con && !contentLenString.equals("Content-Length:")) {
+                contentLenString += new String(bytes, StandardCharsets.UTF_8);
+
+            }
+            if (con && contentLenString.equals("Content-Length:")) {
+                if ((new String(bytes, StandardCharsets.UTF_8)).equals("C"))
+                    con = false;
+                else if ((new String(bytes,StandardCharsets.UTF_8)).matches("-?\\d+")) {
+                    contentLen += new String(bytes, StandardCharsets.UTF_8);
+                }
+            }
+
+            //System.out.println("Looks like bytes: "+looksLikeUTF8(bytes));
+            inputStream.read(bytes);
+        }
+
+
+        int j = 0;
+        if (!looksLikeUTF8(bytes)) {
+            FileOutputStream fos = new FileOutputStream("src/"+image);
+            fos.write(bytes);
+            long startTime = System.currentTimeMillis();
+            while (inputStream.available() != -1 && j < (Integer.parseInt(contentLen)-1))  {
+                if (ava == 5 || (System.currentTimeMillis()-startTime)>1500) {
+                    break;}
+                if (inputStream.available() == 0) {
+                    startTime = System.currentTimeMillis();
+                    ava += 1;
+                }
+
+                fos.write(inputStream.read());
+                //inputStream.read();
+                j+= 1;
+            }
+
+        }
+        outToServer.flush();
+
+
+    }
+
+    public static String imgExtension(String image) {
+        for (int i=0;i<image.length();i++) {
+            if (image.charAt(i) == '.') {
+                return image.substring(i,image.length());
+            }
+        }
+        return null;
+    }
+
+    static boolean looksLikeUTF8(byte[] utf8) throws UnsupportedEncodingException
+    {
+        Pattern p = Pattern.compile("\\A(\n" +
+                "  [\\x09\\x0A\\x0D\\x20-\\x7E]             # ASCII\\n" +
+                "| [\\xC2-\\xDF][\\x80-\\xBF]               # non-overlong 2-byte\n" +
+                "|  \\xE0[\\xA0-\\xBF][\\x80-\\xBF]         # excluding overlongs\n" +
+                "| [\\xE1-\\xEC\\xEE\\xEF][\\x80-\\xBF]{2}  # straight 3-byte\n" +
+                "|  \\xED[\\x80-\\x9F][\\x80-\\xBF]         # excluding surrogates\n" +
+                "|  \\xF0[\\x90-\\xBF][\\x80-\\xBF]{2}      # planes 1-3\n" +
+                "| [\\xF1-\\xF3][\\x80-\\xBF]{3}            # planes 4-15\n" +
+                "|  \\xF4[\\x80-\\x8F][\\x80-\\xBF]{2}      # plane 16\n" +
+                ")*\\z", Pattern.COMMENTS);
+
+        String phonyString = new String(utf8, "ISO-8859-1");
+        return p.matcher(phonyString).matches();
     }
 
 }
