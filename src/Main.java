@@ -154,15 +154,19 @@ class HTTPClient {
                 images.add(htmlText.substring(i+10,imageEnd));
             }
         }
-        System.out.println("Image: "+images+" length: "+images.size());
 
         /*
          * Convert bytes to images
          */
 
         if (images.size() != 0) {
-            for (String img: images)
-                getImage(img,path,inputStream,outToServer);
+            for (String img: images) {
+                getImage(img, path, inputStream, outToServer);
+                //clientSocket = new Socket(path,port);
+                //inputStream = clientSocket.getInputStream();
+                //outToServer = new DataOutputStream(clientSocket.getOutputStream());
+
+            }
         }
 
         //We print the header of the response of the HTTP Command to the terminal:
@@ -285,36 +289,60 @@ class HTTPClient {
     }
 
     public static void getImage(String image, String host, InputStream inputStream,DataOutputStream outToServer) throws IOException {
-        System.out.println("-----------New image: "+image+"-------------------");
+        int ava = 0;
+        String contentLenString = "";
+        String contentLen = "";
+        boolean con = false;
+
         outToServer.writeBytes("GET /"+image+" HTTP/1.1\n");
         outToServer.writeBytes("Host: "+host+"\n");
-        System.out.println("GET /"+image+" HTTP/1.1");
-        System.out.println("Host: "+host);
         outToServer.writeBytes("\n");
         byte [] bytes = new byte [1];
         inputStream.read(bytes);
         while (looksLikeUTF8(bytes)) {
+            if (new String(bytes,StandardCharsets.UTF_8).equals("C") && !con) {
+                contentLenString += new String(bytes, StandardCharsets.UTF_8);
+                con = true;
+            }
+            else if (con && !contentLenString.equals("Content-Length:")) {
+                contentLenString += new String(bytes, StandardCharsets.UTF_8);
+
+            }
+            if (con && contentLenString.equals("Content-Length:")) {
+                if ((new String(bytes, StandardCharsets.UTF_8)).equals("C"))
+                    con = false;
+                else if ((new String(bytes,StandardCharsets.UTF_8)).matches("-?\\d+")) {
+                    contentLen += new String(bytes, StandardCharsets.UTF_8);
+                }
+            }
+
+            //System.out.println("Looks like bytes: "+looksLikeUTF8(bytes));
             inputStream.read(bytes);
         }
+
+
         int j = 0;
         if (!looksLikeUTF8(bytes)) {
-            FileOutputStream fos = new FileOutputStream(image);
+            FileOutputStream fos = new FileOutputStream("src/"+image);
             fos.write(bytes);
-            /*while (inputStream.available() >0) {
-                System.out.println("j: "+j);
-                for (byte b : bytes)
-                    System.out.println("Byte: "+b);
-                inputStream.read(bytes);
-                j+=1;
-            }*/
-            while (inputStream.available() >0) {
-                System.out.println("J: "+j);
-                System.out.print("Available: "+inputStream.available());
+            long startTime = System.currentTimeMillis();
+            while (inputStream.available() != -1 && j < (Integer.parseInt(contentLen)-1))  {
+                if (ava == 5 || (System.currentTimeMillis()-startTime)>1500) {
+                    break;}
+                if (inputStream.available() == 0) {
+                    startTime = System.currentTimeMillis();
+                    ava += 1;
+                }
+
                 fos.write(inputStream.read());
+                //inputStream.read();
                 j+= 1;
             }
 
         }
+        outToServer.flush();
+
+
     }
 
     public static String imgExtension(String image) {
