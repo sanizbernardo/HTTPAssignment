@@ -3,7 +3,6 @@
     <properties maven-id="commons-io:commons-io:2.2" />
     <CLASSES>
       <root url="jar://$MAVEN_REPOSITORY$/commons-io/commons-io/2.2/commons-io-2.2.jar!/" />
-      <root url="jar://$USER_HOME$/Downloads/jsoup-1.11.2.jar!/" />
     </CLASSES>
     <JAVADOC />
     <SOURCES />

@@ -1,7 +1,5 @@
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
 
 import javax.imageio.ImageIO;
 import javax.imageio.stream.ImageInputStream;
@@ -302,16 +300,20 @@ class HTTPClient {
         if (!looksLikeUTF8(bytes)) {
             FileOutputStream fos = new FileOutputStream(image);
             fos.write(bytes);
-            while (inputStream.available() >0) {
+            /*while (inputStream.available() >0) {
                 System.out.println("j: "+j);
                 for (byte b : bytes)
                     System.out.println("Byte: "+b);
                 inputStream.read(bytes);
                 j+=1;
-            }
-            /*while (inputStream.available() >0) {
-                fos.write(inputStream.read());
             }*/
+            while (inputStream.available() >0) {
+                System.out.println("J: "+j);
+                System.out.print("Available: "+inputStream.available());
+                fos.write(inputStream.read());
+                j+= 1;
+            }
+
         }
     }
 
