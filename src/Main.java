@@ -12,6 +12,7 @@ import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.regex.Pattern;
 
 class HTTPClient {
 
@@ -162,31 +163,8 @@ class HTTPClient {
          */
 
         if (images.size() != 0) {
-            ImageInputStream iis = ImageIO.createImageInputStream(inputStream);
-            outToServer.writeBytes("GET /faq.png HTTP/1.1\n");
-            outToServer.writeBytes("Host: tinyos.net \n");
-            outToServer.writeBytes("\n");
-            byte[] buffer = new byte[4096];
-            BufferedImage image = ImageIO.read(iis);
-            System.out.println("Image: "+image);
-            JFrame frame = new JFrame();
-            JLabel label = new JLabel(new ImageIcon(image));
-            frame.getContentPane().add(label, BorderLayout.CENTER);
-            frame.pack();
-            frame.setVisible(true);
-            for (int i=0;i <images.size();i++) {
-
-                //inputStream.read(buffer);
-                //BufferedImage bImageFromConvert = ImageIO.read(inputStream);
-                //ImageIO.write(bImageFromConvert, "jpg", new File(
-                 //       "c:/new-darksouls.jpg"));
-
-                System.out.println("Buffer: "+buffer.length);
-                ByteArrayInputStream bis = new ByteArrayInputStream(buffer);
-                BufferedImage bImage2 = ImageIO.read(bis);
-                System.out.println("bImage2: "+bImage2);
-                ImageIO.write(bImage2, "jpg", new File("output.jpg") );
-            }
+            for (String img: images)
+                getImage(img,path,inputStream,outToServer);
         }
 
         //We print the header of the response of the HTTP Command to the terminal:
@@ -306,6 +284,61 @@ class HTTPClient {
             }
         }
         return html;
+    }
+
+    public static void getImage(String image, String host, InputStream inputStream,DataOutputStream outToServer) throws IOException {
+        System.out.println("-----------New image: "+image+"-------------------");
+        outToServer.writeBytes("GET /"+image+" HTTP/1.1\n");
+        outToServer.writeBytes("Host: "+host+"\n");
+        System.out.println("GET /"+image+" HTTP/1.1");
+        System.out.println("Host: "+host);
+        outToServer.writeBytes("\n");
+        byte [] bytes = new byte [1];
+        inputStream.read(bytes);
+        while (looksLikeUTF8(bytes)) {
+            inputStream.read(bytes);
+        }
+        int j = 0;
+        if (!looksLikeUTF8(bytes)) {
+            FileOutputStream fos = new FileOutputStream(image);
+            fos.write(bytes);
+            while (inputStream.available() >0) {
+                System.out.println("j: "+j);
+                for (byte b : bytes)
+                    System.out.println("Byte: "+b);
+                inputStream.read(bytes);
+                j+=1;
+            }
+            /*while (inputStream.available() >0) {
+                fos.write(inputStream.read());
+            }*/
+        }
+    }
+
+    public static String imgExtension(String image) {
+        for (int i=0;i<image.length();i++) {
+            if (image.charAt(i) == '.') {
+                return image.substring(i,image.length());
+            }
+        }
+        return null;
+    }
+
+    static boolean looksLikeUTF8(byte[] utf8) throws UnsupportedEncodingException
+    {
+        Pattern p = Pattern.compile("\\A(\n" +
+                "  [\\x09\\x0A\\x0D\\x20-\\x7E]             # ASCII\\n" +
+                "| [\\xC2-\\xDF][\\x80-\\xBF]               # non-overlong 2-byte\n" +
+                "|  \\xE0[\\xA0-\\xBF][\\x80-\\xBF]         # excluding overlongs\n" +
+                "| [\\xE1-\\xEC\\xEE\\xEF][\\x80-\\xBF]{2}  # straight 3-byte\n" +
+                "|  \\xED[\\x80-\\x9F][\\x80-\\xBF]         # excluding surrogates\n" +
+                "|  \\xF0[\\x90-\\xBF][\\x80-\\xBF]{2}      # planes 1-3\n" +
+                "| [\\xF1-\\xF3][\\x80-\\xBF]{3}            # planes 4-15\n" +
+                "|  \\xF4[\\x80-\\x8F][\\x80-\\xBF]{2}      # plane 16\n" +
+                ")*\\z", Pattern.COMMENTS);
+
+        String phonyString = new String(utf8, "ISO-8859-1");
+        return p.matcher(phonyString).matches();
     }
 
 }
