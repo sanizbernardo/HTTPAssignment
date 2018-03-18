@@ -31,8 +31,10 @@ class TCPServer
     static class Handler implements Runnable
     {
         Socket socket;
-        private Handler(Socket socket)
-        { this.socket = socket; }
+
+        private Handler(Socket socket) {
+            this.socket = socket;
+        }
 
         @Override
         public void run()
@@ -41,7 +43,7 @@ class TCPServer
                 BufferedReader inFromClient = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 DataOutputStream outToClient = new DataOutputStream(socket.getOutputStream());
 
-                //Confirm thread has been startedd
+                //Confirm thread has been started
                 outToClient.writeBytes("Connected\n");
 
                 //
@@ -63,7 +65,7 @@ class TCPServer
                 String[] requestline = lines[0].split("\\s+");
 
                 //Check if request is valid, give error message otherwise
-                if (!isValidRequest(requestline, outToClient)) {
+                if (!isValidRequest(requestline)) {
                     outToClient.writeBytes("400 Bad Request");
                     //throw error
                 }
@@ -76,23 +78,18 @@ class TCPServer
                 //Choose correct method
                 switch (requestline[0]) {
                     case "HEAD":
-                        confirm(outToClient, requestline[2]);
                         head(outToClient, requestline, date);
                         break;
                     case "GET":
-                        confirm(outToClient, requestline[2]);
                         get(outToClient, requestline, date);
                         break;
                     case "PUT":
-                        confirm(outToClient, requestline[2]);
                         put(outToClient, requestline, date);
                         break;
                     case "POST":
-                        confirm(outToClient, requestline[2]);
                         post(outToClient, requestline, date);
                         break;
                     case "DELETE":
-                        confirm(outToClient, requestline[2]);
                         delete(outToClient, requestline, date);
                         break;
                     default:
@@ -105,7 +102,7 @@ class TCPServer
             }
         }
 
-        private boolean isValidRequest(String[] request, DataOutputStream out) throws  IOException{
+        private boolean isValidRequest(String[] request) throws  IOException{
             boolean b = true;
 
             //Request always contains method and file. Http version is optional, default to HTTP 1.0. Never more than 3
@@ -119,10 +116,6 @@ class TCPServer
             }
 
             return  b;
-        };
-
-        private void confirm(DataOutputStream out, String httpversion) throws  IOException {
-            out.writeBytes(httpversion + " 200 OK\n");
         };
 
         private void head(DataOutputStream out, String[] request, String date) throws  IOException {
@@ -168,7 +161,16 @@ class TCPServer
 
         private void put(DataOutputStream out, String[] request, String date) throws  IOException {
             System.out.println("Put detected");
+            String response = " 200 OK\n";
 
+            //Check if file already exists
+            File htmlFile = new File("src" + request[1]);
+            if(!htmlFile.exists() || htmlFile.isDirectory()) {
+                response = " 201 Created\n";
+            }
+
+            out.writeBytes(request[2] + response);
+            out.writeBytes("Content Location: src" + request[1]);
             out.writeBytes("Date: " + date + "\n");
             out.writeBytes("\n");
         };
@@ -176,6 +178,16 @@ class TCPServer
         private void post(DataOutputStream out, String[] request, String date) throws  IOException {
             System.out.println("Post detected");
 
+            //Check if file already exists
+            File htmlFile = new File("src" + request[1]);
+            if(!htmlFile.exists() || htmlFile.isDirectory()) {
+                out.writeBytes("404 Not found");
+                //Throw error
+            }
+
+            out.writeBytes("Host: localhost");
+            out.writeBytes("Content-Type: ");
+            out.writeBytes("Content-Length: ");
             out.writeBytes("Date: " + date + "\n");
             out.writeBytes("\n");
 
@@ -192,14 +204,14 @@ class TCPServer
             }
 
             //Fetch delete message
-            File confirmdelete = new File("src/deletemessage.html");
-            String htmlString = FileUtils.readFileToString(confirmdelete);
+            File message = new File("src/deletemessage.html");
+            String confirmdelete = FileUtils.readFileToString(message);
 
             out.writeBytes("Date: " + date + "\n");
             out.writeBytes("\n");
 
             //output delete message
-            out.writeBytes(htmlString);
+            out.writeBytes(confirmdelete);
         };
 
     }
