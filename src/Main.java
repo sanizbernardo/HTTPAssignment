@@ -1,5 +1,9 @@
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
 import javax.imageio.ImageIO;
 import javax.imageio.stream.ImageInputStream;
@@ -67,22 +71,26 @@ class HTTPClient {
         // Incoming HTTP command from request is GET, so calling get method with
         // correct path and data output stream
         if (HTTPCommand.equals("GET")) {
-            Get(path,outToServer,"/index.html");
+            Get(path,outToServer,"/");
         }
 
         // Incoming HTTP command from request is HEAD
         else if (HTTPCommand.equals("HEAD")) {
-            Head(path,outToServer, "/index.html");
+            Head(path,outToServer, "/");
         }
 
         // Incoming HTTP command from request is PUT
         else if (HTTPCommand.equals("PUT")) {
-            Put(path,port);
+            Put(path,outToServer,"/");
         }
 
         // Incoming HTTP command from request is POST
         else if (HTTPCommand.equals("POST")) {
-            Post(path,port);
+            Post(path,outToServer,"/");
+        }
+
+        else if(HTTPCommand.equals("DELETE")) {
+            Delete(path,outToServer,"/");
         }
 
         /*
@@ -159,8 +167,9 @@ class HTTPClient {
 
         // If the method above has found any images, loop through all the found images and call up getImage method on every image
         // to convert the bytes of the images in inputStream into files.
-        if (images.size() != 0) {
-            for (String img: images) {
+        if (getImages(htmlText).size() != 0) {
+            for (String img: getImages(htmlText)) {
+                System.out.println("Image1: "+img);
                 getImage(img, path, inputStream, outToServer);
             }
         }
@@ -192,25 +201,29 @@ class HTTPClient {
      */
     public static void Get(String path,DataOutputStream outToServer,String resource) throws IOException
     {
-        outToServer.writeBytes("GET "+resource+" HTTP/1.1\n");
-        outToServer.writeBytes("Host: "+path+" \n");
-        outToServer.writeBytes("\n");
+        outToServer.writeBytes("GET "+resource+" HTTP/1.1\r\n");
+        outToServer.writeBytes("Host: "+path+"\r\n");
+        outToServer.writeBytes("\r\n");
     }
 
     public static void Head(String path, DataOutputStream outToServer,String resource) throws IOException
     {
-        outToServer.writeBytes("HEAD "+resource+" HTTP/1.1\n");
-        outToServer.writeBytes("Host: "+path+" \n");
-        outToServer.writeBytes("\n");
+        outToServer.writeBytes("HEAD "+resource+" HTTP/1.1\r\n");
+        outToServer.writeBytes("Host: "+path+"\r\n");
+        outToServer.writeBytes("\r\n");
     }
 
-    public static void Put(String path, int port)
+    public static void Put(String path, DataOutputStream outToServer, String resource)
     {
         //String userInput = System.in;
     }
 
-    public static void Post(String path, int port)
+    public static void Post(String path, DataOutputStream outToServer, String resource)
     {
+
+    }
+
+    public static void Delete(String path, DataOutputStream outToServer, String resource) {
 
     }
 
@@ -298,12 +311,12 @@ class HTTPClient {
         String contentLenString = "";
         String contentLen = "";
         boolean con = false;
-        byte [] bytes = new byte [1];
+        byte [] bytes = new byte [4];
 
         // Send out the GET request to the server
-        outToServer.writeBytes("GET /"+image+" HTTP/1.1\n");
-        outToServer.writeBytes("Host: "+host+"\n");
-        outToServer.writeBytes("\n");
+        outToServer.writeBytes("GET /"+image+" HTTP/1.1\r\n");
+        outToServer.writeBytes("Host: "+host+"\r\n");
+        outToServer.writeBytes("\r\n");
         inputStream.read(bytes);
 
         // This part reads the header from the response of the GET request, so that the bytes
@@ -311,40 +324,57 @@ class HTTPClient {
         // It checks whether the bytes are UTF-8, if this is the case then we are still in the
         // header.
         // This method also searches for the content length that is provided in the header. (Content length of the image requested)
-        while (looksLikeUTF8(bytes)) {
-            if (new String(bytes,StandardCharsets.UTF_8).equals("C") && !con) {
-                contentLenString += new String(bytes, StandardCharsets.UTF_8);
-                con = true;
-            }
-            else if (con && !contentLenString.equals("Content-Length:")) {
-                contentLenString += new String(bytes, StandardCharsets.UTF_8);
+        int length = inputStream.read(bytes);
+        System.out.println("Length: "+length);
+        int i;
+        String line = "";
+        String contentLength = "";
+        while(length == 4) {
+            System.out.println("LOL");
+            line += new String(bytes,0,length);
+            if (new String(bytes,0,length).equals("\r\n\r\n"))
+                break;
+            length = inputStream.read(bytes);
+
+        }
+        //System.out.println(line);
+        outerloop:
+        for (i = 0; i< line.length()-15;i++) {
+            System.out.println(line.substring(i,i+15));
+            if (line.substring(i,i+15).equals("Content-Length:")) {
+                for (int j = i+15;j < line.length();j++) {
+                    System.out.println(line.charAt(j));
+                    if (line.charAt(j) == 'C')
+                        break outerloop;
+                    if (Character.toString(line.charAt(j)).matches("-?\\d+")) {
+                        System.out.println("MATCHES");
+                        contentLength += line.charAt(j);
+                    }
+                }
 
             }
-            if (con && contentLenString.equals("Content-Length:")) {
-                if ((new String(bytes, StandardCharsets.UTF_8)).equals("C"))
-                    con = false;
-                else if ((new String(bytes,StandardCharsets.UTF_8)).matches("-?\\d+")) {
-                    contentLen += new String(bytes, StandardCharsets.UTF_8);
-                }
-            }
-            inputStream.read(bytes);
+
         }
+        System.out.println("CONTENTLENGTH: "+contentLength);
 
         // Using the content byte and checking if the next byte does not look like UTF-8,
         // we start reading the input stream and write byte per byte to a file that will contain the image requested at the end
         int j = 0;
-        if (!looksLikeUTF8(bytes)) {
-            FileOutputStream fos = new FileOutputStream("src/"+image);
-            fos.write(bytes);
-
-            // This loop will keep looping as long as there is data in the input stream and the amount of iterations won't exceed the
-            // content length that was found in the header.
-            while (inputStream.available() != -1 && j < (Integer.parseInt(contentLen)-1))  {
-                fos.write(inputStream.read());
-                j+= 1;
-            }
-
+        if (detectPathImg(image) != null) {
+            new File(detectPathImg("src"+image)[0]).mkdirs();
+            image = detectPathImg(image)[1];
         }
+        FileOutputStream fos = new FileOutputStream("src/"+image);
+        fos.write(bytes);
+
+        // This loop will keep looping as long as there is data in the input stream and the amount of iterations won't exceed the
+        // content length that was found in the header.
+        while (inputStream.available() != -1 && j < (Integer.parseInt(contentLength)))  {
+            fos.write(inputStream.read());
+            j+= 1;
+        }
+
+
         outToServer.flush();
 
 
@@ -372,6 +402,44 @@ class HTTPClient {
 
         String phonyString = new String(utf8, "ISO-8859-1");
         return p.matcher(phonyString).matches();
+    }
+
+    public static ArrayList<String> getImages(String html) {
+        ArrayList<String> images = new ArrayList<>();
+        Document doc = Jsoup.parse(html);
+
+        // Get all img tags
+        Elements img = doc.getElementsByTag("img");
+
+        int counter = 0;
+
+        // Loop through img tags
+        for (Element el : img) {
+            // If alt is empty or null, add one to counter
+            if(el.attr("alt") == null || el.attr("alt").equals("")) {
+                counter++;
+            }
+            images.add(el.attr("src"));
+        }
+        return images;
+    }
+
+    public static String [] detectPathImg(String image) {
+        String [] str = new String [2];
+        int i =0;
+        if (image.contains("/")) {
+            for (i = image.length()-1;i >-1;i--) {
+                if (image.charAt(i) == '/')
+                    break;
+            }
+        }
+        if (i == 0)
+            return null;
+        else {
+            str[0]  =image.substring(0, i + 1);
+            str[1] = image.substring(i+1,image.length());
+            return str;
+        }
     }
 
 }
