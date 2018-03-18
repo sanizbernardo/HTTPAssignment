@@ -317,7 +317,7 @@ class HTTPClient {
         outToServer.writeBytes("GET /"+image+" HTTP/1.1\r\n");
         outToServer.writeBytes("Host: "+host+"\r\n");
         outToServer.writeBytes("\r\n");
-        inputStream.read(bytes);
+        //inputStream.read(bytes);
 
         // This part reads the header from the response of the GET request, so that the bytes
         // of the header won't be included while reading the bytes to makethe image file.
@@ -330,24 +330,22 @@ class HTTPClient {
         String line = "";
         String contentLength = "";
         while(length == 4) {
-            System.out.println("LOL");
+            //System.out.println("LOL");
             line += new String(bytes,0,length);
+            System.out.println("Subbytes: "+new String(bytes,0,length));
             if (new String(bytes,0,length).equals("\r\n\r\n"))
                 break;
             length = inputStream.read(bytes);
 
         }
-        //System.out.println(line);
+        System.out.println(line);
         outerloop:
         for (i = 0; i< line.length()-15;i++) {
-            System.out.println(line.substring(i,i+15));
             if (line.substring(i,i+15).equals("Content-Length:")) {
                 for (int j = i+15;j < line.length();j++) {
-                    System.out.println(line.charAt(j));
                     if (line.charAt(j) == 'C')
                         break outerloop;
                     if (Character.toString(line.charAt(j)).matches("-?\\d+")) {
-                        System.out.println("MATCHES");
                         contentLength += line.charAt(j);
                     }
                 }
