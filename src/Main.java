@@ -59,8 +59,6 @@ class HTTPClient {
 
         // Create output stream for requests to socket
         DataOutputStream outToServer = new DataOutputStream(clientSocket.getOutputStream());
-        // TODO remove this: BufferedReader inFromServer = new BufferedReader(new InputStreamReader(inputStream));
-        // TODO String sentence = inFromUser.readLine();
 
         /*
          * Check for which HTTP command to execute
@@ -159,31 +157,28 @@ class HTTPClient {
          * Convert bytes to images
          */
 
+        // If the method above has found any images, loop through all the found images and call up getImage method on every image
+        // to convert the bytes of the images in inputStream into files.
         if (images.size() != 0) {
             for (String img: images) {
                 getImage(img, path, inputStream, outToServer);
-                //clientSocket = new Socket(path,port);
-                //inputStream = clientSocket.getInputStream();
-                //outToServer = new DataOutputStream(clientSocket.getOutputStream());
-
             }
         }
 
-        //We print the header of the response of the HTTP Command to the terminal:
+        //We print the header of the response of the HTTP Command to the terminal.
         System.out.println(searchForHeader(fullText));
 
-
+        // Use the found parameters of the title and body part of the html part and take these out of the string so we can
+        // replace the title and body part of the html template to create our own template.
         String htmlString = FileUtils.readFileToString(htmlTemplateFile);
         String title = htmlText.substring(titlestart, titleend);
         String body = htmlText.substring(bodystart, bodyend);
-        String header= ""; //TODO
-        htmlString = htmlString.replace("$header",header);
         htmlString = htmlString.replace("$title", title);
         htmlString = htmlString.replace("$body", body);
         File newHtmlFile = new File("src/new.html");
         FileUtils.writeStringToFile(newHtmlFile, htmlString);
 
-
+        // After completing all the necessary tasks, close the socket.
         clientSocket.close();
     }
 
@@ -288,17 +283,34 @@ class HTTPClient {
         return html;
     }
 
+    /**
+     * This method sends out a GET command for the given image to the given host,
+     * finds the given image inside the input stream and takes the right amount of bytes and writes
+     * these bytes into a file that will be stored inside the source folder.
+     * @param image
+     * @param host
+     * @param inputStream
+     * @param outToServer
+     * @throws IOException
+     */
     public static void getImage(String image, String host, InputStream inputStream,DataOutputStream outToServer) throws IOException {
-        int ava = 0;
+        // Initialize some variables that will be needed in this method
         String contentLenString = "";
         String contentLen = "";
         boolean con = false;
+        byte [] bytes = new byte [1];
 
+        // Send out the GET request to the server
         outToServer.writeBytes("GET /"+image+" HTTP/1.1\n");
         outToServer.writeBytes("Host: "+host+"\n");
         outToServer.writeBytes("\n");
-        byte [] bytes = new byte [1];
         inputStream.read(bytes);
+
+        // This part reads the header from the response of the GET request, so that the bytes
+        // of the header won't be included while reading the bytes to makethe image file.
+        // It checks whether the bytes are UTF-8, if this is the case then we are still in the
+        // header.
+        // This method also searches for the content length that is provided in the header. (Content length of the image requested)
         while (looksLikeUTF8(bytes)) {
             if (new String(bytes,StandardCharsets.UTF_8).equals("C") && !con) {
                 contentLenString += new String(bytes, StandardCharsets.UTF_8);
@@ -315,27 +327,20 @@ class HTTPClient {
                     contentLen += new String(bytes, StandardCharsets.UTF_8);
                 }
             }
-
-            //System.out.println("Looks like bytes: "+looksLikeUTF8(bytes));
             inputStream.read(bytes);
         }
 
-
+        // Using the content byte and checking if the next byte does not look like UTF-8,
+        // we start reading the input stream and write byte per byte to a file that will contain the image requested at the end
         int j = 0;
         if (!looksLikeUTF8(bytes)) {
             FileOutputStream fos = new FileOutputStream("src/"+image);
             fos.write(bytes);
-            long startTime = System.currentTimeMillis();
-            while (inputStream.available() != -1 && j < (Integer.parseInt(contentLen)-1))  {
-                if (ava == 5 || (System.currentTimeMillis()-startTime)>1500) {
-                    break;}
-                if (inputStream.available() == 0) {
-                    startTime = System.currentTimeMillis();
-                    ava += 1;
-                }
 
+            // This loop will keep looping as long as there is data in the input stream and the amount of iterations won't exceed the
+            // content length that was found in the header.
+            while (inputStream.available() != -1 && j < (Integer.parseInt(contentLen)-1))  {
                 fos.write(inputStream.read());
-                //inputStream.read();
                 j+= 1;
             }
 
@@ -345,15 +350,13 @@ class HTTPClient {
 
     }
 
-    public static String imgExtension(String image) {
-        for (int i=0;i<image.length();i++) {
-            if (image.charAt(i) == '.') {
-                return image.substring(i,image.length());
-            }
-        }
-        return null;
-    }
-
+    /**
+     * This method takes in a byte array and checks whether the elements in the byte array look like UTF-8 elements and returns
+     * a boolean.
+     * @param utf8
+     * @return
+     * @throws UnsupportedEncodingException
+     */
     static boolean looksLikeUTF8(byte[] utf8) throws UnsupportedEncodingException
     {
         Pattern p = Pattern.compile("\\A(\n" +
