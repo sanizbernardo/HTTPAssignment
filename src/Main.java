@@ -1,15 +1,9 @@
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import javax.imageio.ImageIO;
-import javax.imageio.stream.ImageInputStream;
-import javax.swing.*;
-import java.awt.*;
-import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
@@ -91,7 +85,7 @@ class HTTPClient {
         }
 
         else if(HTTPCommand.equals("DELETE")) {
-            Delete(path,outToServer,"/");
+            Delete(uri.toString(),outToServer,path);
         }
 
         /*
@@ -177,7 +171,11 @@ class HTTPClient {
         }
 
         //We print the header of the response of the HTTP Command to the terminal.
-        System.out.println(searchForHeader(fullText));
+        if (HTTPCommand.equals("GET"))
+            System.out.println(searchForHeader(fullText));
+        else if (HTTPCommand.equals("HEAD"))
+            System.out.println(fullText);
+
 
         // Use the found parameters of the title and body part of the html part and take these out of the string so we can
         // replace the title and body part of the html template to create our own template.
@@ -225,8 +223,10 @@ class HTTPClient {
 
     }
 
-    public static void Delete(String path, DataOutputStream outToServer, String resource) {
-
+    public static void Delete(String path, DataOutputStream outToServer, String resource) throws IOException {
+        outToServer.writeBytes("DELETE /"+resource+" HTTP/1.1");
+        outToServer.writeBytes("Host: "+path+"\r\n");
+        outToServer.writeBytes("\r\n");
     }
 
     /**
