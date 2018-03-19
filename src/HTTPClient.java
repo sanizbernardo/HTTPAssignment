@@ -161,7 +161,7 @@ class HTTPClient {
 
         // If the method above has found any images, loop through all the found images and call up getImage method on every image
         // to convert the bytes of the images in inputStream into files.
-        System.out.println("Images: "+getImages(htmlText));
+        //System.out.println("Images: "+getImages(htmlText));
         if (getImages(htmlText).size() != 0) {
             for (String img: getImages(htmlText)) {
                 System.out.println("Image1: "+img);
