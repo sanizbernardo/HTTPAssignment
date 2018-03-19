@@ -70,6 +70,8 @@ class HTTPClient {
 
             // Creating new html template
             File htmlTemplateFile = new File("src/template.html");
+            String request = "";
+            String resource = "/";
             while (true) {
                 try {
                     /*
@@ -78,7 +80,17 @@ class HTTPClient {
                     Scanner scanner = new Scanner(System.in);
                     String fullText;
                     String htmlText;
-                    String request;
+
+                    /*
+                     * Check if this is the first iteration or if the user has submitted a new request. If the user has submitted a new request,
+                     * replace the variables of HTTP command and path with the arguments provided in the new response.
+                     */
+                    if (counter > 1) {
+                        ArrayList<String> args=parseRequest(request);
+                        HTTPCommand = args.get(0);
+                        resource = args.get(1);
+                        request = "";
+                    }
 
                     // Creating byte array for incoming bytes
                     byte[] bytes = new byte[100];
@@ -91,10 +103,10 @@ class HTTPClient {
                     // correct path and data output stream
                     switch (HTTPCommand) {
                         case "HEAD":
-                            Head(path, outToServer, "/");
+                            Head(path, outToServer, resource);
                             break;
                         case "GET":
-                            Get(path, outToServer, "/");
+                            Get(path, outToServer, resource);
                             break;
                         case "PUT":
                             PutOrPost(HTTPCommand, path, outToServer);
@@ -114,21 +126,20 @@ class HTTPClient {
                      * Convert the bytes from input stream to string
                      */
 
-                    //Read from input stream
-                    inputStream.read();
-
                     //Calling up the method to cast bytes of input stream to string
-                    fullText = byteToString("H", bytes, inputStream);
+                    fullText = byteToString(bytes, inputStream);
 
                     //Sometimes the inputStream.available() does not see all the data immediately, so we check if we have all the
                     //data for our html file with ends in </HTML> or </html>, if the String does not contain one of these two elements
                     // then we keep converting bytes of inputStream to String and add the result onto the existing string until it contains one
                     // of the two html elements.
+
                     if (HTTPCommand.equals("GET")) {
                         while (!(fullText.contains("</HTML>") || fullText.contains("</html>"))) {
-                            fullText += byteToString("", bytes, inputStream);
+                            fullText += byteToString(bytes, inputStream);
                         }
                     }
+
 
                     //Find the html text part of the response from the HTTP Command
                     htmlText = searchForHtml(fullText);
@@ -154,6 +165,7 @@ class HTTPClient {
                     // to convert the bytes of the images in inputStream into files.
                     if (getImages(htmlText).size() != 0) {
                         for (String img : getImages(htmlText)) {
+                            System.out.println("Image: "+img);
                             if (img.length() != 0)
                                 getImage(img, path, inputStream, outToServer);
                         }
@@ -173,16 +185,19 @@ class HTTPClient {
                     String body = htmlText.substring(bodyStart, bodyEnd);
                     htmlString = htmlString.replace("$title", title);
                     htmlString = htmlString.replace("$body", body);
-                    File newHtmlFile = new File("src/new.html"+counter);
+                    File newHtmlFile = new File("src/new"+counter+".html");
                     FileUtils.writeStringToFile(newHtmlFile, htmlString);
 
-                    if ((request = scanner.next()).length() ==0)
+                    System.out.println("Type your next request or type \"STOP\" if you want to close the client.");
+                    request = scanner.nextLine();
+                    if (request.equals("STOP")) {
                         break;
+                    }
                     counter ++;
 
 
                 } catch (IOException e) {
-
+                    System.out.println("IOException happened");
                 }
             }
             try {
@@ -202,11 +217,12 @@ class HTTPClient {
          * @param resource
          * @throws IOException
          */
-        public void Get(String host,DataOutputStream outToServer,String resource) throws IOException
+        void Get(String host,DataOutputStream outToServer,String resource) throws IOException
         {
             outToServer.writeBytes("GET "+resource+" HTTP/1.1\r\n");
             outToServer.writeBytes("Host: "+host+"\r\n");
             outToServer.writeBytes("\r\n");
+
         }
 
         /**
@@ -216,7 +232,7 @@ class HTTPClient {
          * @param resource
          * @throws IOException
          */
-        public void Head(String host, DataOutputStream outToServer,String resource) throws IOException
+        void Head(String host, DataOutputStream outToServer,String resource) throws IOException
         {
             outToServer.writeBytes("HEAD "+resource+" HTTP/1.1\r\n");
             outToServer.writeBytes("Host: "+host+"\r\n");
@@ -234,7 +250,7 @@ class HTTPClient {
          * @param outToServer
          * @throws IOException
          */
-        public void PutOrPost(String putOrPost,String path, DataOutputStream outToServer) throws IOException {
+        void PutOrPost(String putOrPost,String path, DataOutputStream outToServer) throws IOException {
             Scanner scanner = new Scanner(System.in);
             outToServer.writeBytes(putOrPost +" /"+path+" HTTP/1.1\r\n");
             System.out.print("Host: ");
@@ -248,6 +264,7 @@ class HTTPClient {
             outToServer.writeBytes(scanner.nextLine()+"\r\n");
         }
 
+
         /**
          * This method deletes a given file from the server.
          * @param host
@@ -255,7 +272,7 @@ class HTTPClient {
          * @param file
          * @throws IOException
          */
-        public void Delete(String host, DataOutputStream outToServer, String file) throws IOException {
+        void Delete(String host, DataOutputStream outToServer, String file) throws IOException {
             outToServer.writeBytes("DELETE /"+file+" HTTP/1.1");
             outToServer.writeBytes("Host: "+host+"\r\n");
             outToServer.writeBytes("\r\n");
@@ -267,20 +284,22 @@ class HTTPClient {
          * to string. If the available data in the input stream is smaller than 100 bytes, it will take the
          * remaining bytes left in the input stream and turn those remaining bytes into a string and add it onto the
          * longer string that was created during the while loop.
-         * @param byteString
          * @param bytes
          * @param inputStream
          * @return
          * @throws IOException
          */
-        public String byteToString(String byteString,byte[] bytes,InputStream inputStream) throws IOException
+        String byteToString(byte[] bytes,InputStream inputStream) throws IOException
         {
+            String byteString = "";
             byte[] restBytes;
             //Continue doing so until the amount of data in input stream is less than 100 bytes
             while (inputStream.available() > 100) {
                 inputStream.read(bytes, 0, 100);
-                byteString += new String(bytes, StandardCharsets.UTF_8);;
+                byteString += new String(bytes, StandardCharsets.UTF_8);
                 bytes = new byte[100];
+
+
             }
 
             // The remaining bytes in input stream smaller than 100 is put into 'rest'
@@ -318,7 +337,7 @@ class HTTPClient {
          * @return
          */
 
-        public String searchForHtml(String fullText)
+        String searchForHtml(String fullText)
         {
             String html = "";
             for (int i=0;i <fullText.length();i++) {
@@ -340,7 +359,7 @@ class HTTPClient {
          * @param outToServer
          * @throws IOException
          */
-        public void getImage(String image, String host, InputStream inputStream,DataOutputStream outToServer) throws IOException {
+        void getImage(String image, String host, InputStream inputStream,DataOutputStream outToServer) throws IOException {
             // Initialize some variables that will be needed in this method
             byte [] bytes = new byte [1];
             // Send out the GET request to the server
@@ -392,7 +411,6 @@ class HTTPClient {
             }
 
             // If the image from the server is stored in another folder than the source, a new directory will be created inside source.
-            int j = 0;
             if (detectPathImg(image) != null) {
                 new File(detectPathImg("src/"+image)).mkdirs();
             }
@@ -404,6 +422,7 @@ class HTTPClient {
 
             // This loop will keep looping as long as there is data in the input stream and the amount of iterations won't exceed the
             // content length that was found in the header.
+            int j = 0;
             while (chunk != -1)  {
                 fos.write(htmlByte,0,chunk);
                 j+= chunk;
@@ -424,7 +443,7 @@ class HTTPClient {
          * @param html
          * @return
          */
-        public ArrayList<String> getImages(String html) {
+        ArrayList<String> getImages(String html) {
             ArrayList<String> images = new ArrayList<>();
             Document doc = Jsoup.parse(html);
 
@@ -433,8 +452,8 @@ class HTTPClient {
 
             // Loop through img tags
             for (Element el : img) {
+                //search for src
                 images.add(el.attr("src"));
-                images.add(el.attr("lowsrc"));
             }
             return images;
         }
@@ -444,8 +463,7 @@ class HTTPClient {
          * @param image
          * @return
          */
-        public String detectPathImg(String image) {
-            String [] str = new String [2];
+        String detectPathImg(String image) {
             int i =0;
             if (image.contains("/")) {
                 for (i = image.length()-1;i >-1;i--) {
@@ -461,7 +479,7 @@ class HTTPClient {
             }
         }
 
-        public int[] findBeginEndIndex(String htmlText, String searchBegin, String searchEnd) {
+        int[] findBeginEndIndex(String htmlText, String searchBegin, String searchEnd) {
             String searchUpperBegin = searchBegin.toUpperCase(), searchUpperEnd = searchEnd.toUpperCase();
             int start = 0, end = 0;
             for (int i = 0; i < htmlText.toCharArray().length - 9; i++) {
@@ -480,6 +498,26 @@ class HTTPClient {
             int [] result = {start, end};
             return result;
         }
+
+        ArrayList<String> parseRequest(String request) {
+            System.out.println("Parserequest: "+request);
+            ArrayList<String> args = new ArrayList<>();
+            int j = 0;
+            int i = 0;
+            for (i=0;i < request.length();i++) {
+                if (request.charAt(i) == ' ') {
+                    if (j < i)
+                        args.add(request.substring(j,i));
+                    j = i+1;
+                }
+            }
+            if (j < i)
+                args.add(request.substring(j,i));
+            System.out.println("Args: "+args);
+            return args;
+        }
+
+
 
 
 

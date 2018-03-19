@@ -17,7 +17,6 @@ class TCPServer
         // always true -> server remains active
         while(true)
         {
-            System.out.println("WHILE");
             Socket connectionSocket = welcomeSocket.accept();
             if (connectionSocket != null)
             {
@@ -132,7 +131,7 @@ class TCPServer
         };
 
         private String head(DataOutputStream out, String[] request, String[] lines, String date) throws  IOException {
-            System.out.println("Head detected");
+            System.out.println("Head detected: "+request[1] );
             //Check if file already exists
             File htmlFile = new File("src" + request[1]);
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
