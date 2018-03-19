@@ -14,6 +14,7 @@ import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.regex.Pattern;
 
 class HTTPClient {
@@ -167,6 +168,7 @@ class HTTPClient {
 
         // If the method above has found any images, loop through all the found images and call up getImage method on every image
         // to convert the bytes of the images in inputStream into files.
+        System.out.println("Images: "+getImages(htmlText));
         if (getImages(htmlText).size() != 0) {
             for (String img: getImages(htmlText)) {
                 System.out.println("Image1: "+img);
@@ -309,11 +311,11 @@ class HTTPClient {
     public static void getImage(String image, String host, InputStream inputStream,DataOutputStream outToServer) throws IOException {
         // Initialize some variables that will be needed in this method
         String contentLenString = "";
-        String contentLen = "";
+        //String contentLen = "";
         boolean con = false;
-        byte [] bytes = new byte [4];
-
+        byte [] bytes = new byte [1];
         // Send out the GET request to the server
+        System.out.println("GetImage: "+image);
         outToServer.writeBytes("GET /"+image+" HTTP/1.1\r\n");
         outToServer.writeBytes("Host: "+host+"\r\n");
         outToServer.writeBytes("\r\n");
@@ -324,23 +326,40 @@ class HTTPClient {
         // It checks whether the bytes are UTF-8, if this is the case then we are still in the
         // header.
         // This method also searches for the content length that is provided in the header. (Content length of the image requested)
-        int length = inputStream.read(bytes);
-        System.out.println("Length: "+length);
-        int i;
+        int length;
         String line = "";
         String contentLength = "";
-        while(length == 4) {
+        boolean rBool1 = false;
+        boolean rBool2 = false;
+        boolean nBool1 = false;
+        boolean nBool2 = false;
+        while((length = inputStream.read(bytes)) != -1) {
             //System.out.println("LOL");
             line += new String(bytes,0,length);
-            System.out.println("Subbytes: "+new String(bytes,0,length));
-            if (new String(bytes,0,length).equals("\r\n\r\n"))
+            for (byte b: bytes){
+
+                if (b == 13)
+                    rBool1 = true;
+                if (b == 10 && rBool1)
+                    nBool1 = true;
+                if (b == 13 && rBool1 && nBool1)
+                    rBool2 = true;
+                if (b == 10 && rBool1 && nBool1 && rBool2)
+                    nBool2 = true;
+                if (b != 13 && b != 10) {
+                    rBool1 = false;
+                    rBool2 = false;
+                    nBool1 = false;
+                    nBool2 = false;
+                }
+            }
+            if (rBool1 && rBool2 && nBool1 && nBool2)
                 break;
-            length = inputStream.read(bytes);
 
         }
         System.out.println(line);
         outerloop:
-        for (i = 0; i< line.length()-15;i++) {
+        for (int i = 0; i< line.length()-15;i++) {
             if (line.substring(i,i+15).equals("Content-Length:")) {
                 for (int j = i+15;j < line.length();j++) {
                     if (line.charAt(j) == 'C')
@@ -359,17 +378,38 @@ class HTTPClient {
         // we start reading the input stream and write byte per byte to a file that will contain the image requested at the end
         int j = 0;
         if (detectPathImg(image) != null) {
-            new File(detectPathImg("src"+image)[0]).mkdirs();
-            image = detectPathImg(image)[1];
+            new File(detectPathImg("src/"+image)[0]).mkdirs();
+            //image = detectPathImg(image)[1];
         }
-        FileOutputStream fos = new FileOutputStream("src/"+image);
-        fos.write(bytes);
 
+
+        FileOutputStream fos = new FileOutputStream("src/"+image);
+        //fos.write(bytes);
+        int contentLen = Integer.parseInt(contentLength);
+        //byte [] htmlByte = new byte[Math.min(4096,contentLen)];
+        byte [] htmlByte = new byte[100];
+
+        int chunk =inputStream.read(htmlByte);
         // This loop will keep looping as long as there is data in the input stream and the amount of iterations won't exceed the
         // content length that was found in the header.
-        while (inputStream.available() != -1 && j < (Integer.parseInt(contentLength)))  {
-            fos.write(inputStream.read());
-            j+= 1;
+        System.out.println("-----------------Begin write-------------");
+        while (chunk != -1)  {
+            for (byte b:htmlByte)
+               System.out.println(b);
+            System.out.println("Chunk: "+chunk+" j: "+j+" Contentlen: "+contentLen+" contentlen -j: "+(contentLen-j)+" htmlByte: "+htmlByte.length);
+
+            fos.write(htmlByte);
+            j+= chunk;
+            if (j >= contentLen) {
+                System.out.println("------------------J: "+j+" Chunk: "+chunk+" contentlength: "+contentLen);
+                break;
+            }
+            if ((contentLen-j) < chunk) {
+                htmlByte = new byte[contentLen - j];
+            }
+            chunk = inputStream.read(htmlByte);
+
+            //System.out.println("Chunk, read: "+(chunk = inputStream.read(htmlByte))+" J: "+j+" contentlength: "+contentLen);
         }
 
 
