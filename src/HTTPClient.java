@@ -7,7 +7,11 @@ import org.jsoup.select.Elements;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 class HTTPClient {
@@ -194,10 +198,16 @@ class HTTPClient {
      * @param resource
      * @throws IOException
      */
-    public static void Get(String path,DataOutputStream outToServer,String resource) throws IOException
+    public static void Get(String path,DataOutputStream outToServer,String resource) throws IOException, ParseException
     {
+        SimpleDateFormat testformat = new SimpleDateFormat("yyyy-MM-dd");
+        Date date = testformat.parse("2009-12-31");
+        SimpleDateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", Locale.US);
+        String testdate = dateFormat.format(date);
+
         outToServer.writeBytes("GET "+resource+" HTTP/1.1\r\n");
         outToServer.writeBytes("Host: "+path+"\r\n");
+        outToServer.writeBytes("If-Modified-Since: " + testdate + "\r\n");
         outToServer.writeBytes("\r\n");
     }
 
