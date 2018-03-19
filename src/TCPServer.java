@@ -2,10 +2,10 @@ import org.apache.commons.io.FileUtils;
 
 import java.io.*;
 import java.net.*;
+import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 class TCPServer
 {
@@ -43,9 +43,6 @@ class TCPServer
                 BufferedReader inFromClient = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 DataOutputStream outToClient = new DataOutputStream(socket.getOutputStream());
 
-                //Confirm thread has been started
-                outToClient.writeBytes("Connected\n");
-
                 //
                 boolean requestcomplete = false;
                 List<String> input = new ArrayList<String>();
@@ -71,9 +68,10 @@ class TCPServer
                 }
 
                 //get current date
-                DateTimeFormatter format = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
-                LocalDateTime now = LocalDateTime.now();
-                String date = format.format(now);
+                Calendar calendar = Calendar.getInstance();
+                SimpleDateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", Locale.US);
+                dateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
+                String date = dateFormat.format(calendar.getTime());
 
                 //Choose correct method
                 switch (requestline[0]) {
@@ -119,87 +117,82 @@ class TCPServer
         };
 
         private void head(DataOutputStream out, String[] request, String date) throws  IOException {
-            System.out.println("Head detected");
-
             //Check if file already exists
             File htmlFile = new File("src" + request[1]);
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
-                out.writeBytes("404 Not found");
-                //Throw error
-            }
-
-            String htmlString = FileUtils.readFileToString(htmlFile);
-
-            //Output headers
-            out.writeBytes("Content-Type: " + "\n");
-            out.writeBytes("Content-Length: " + htmlString.length() + "\n");
-            out.writeBytes("Date: " + date + "\n");
-            out.writeBytes("\n");
-        };
-
-        private void get(DataOutputStream out, String[] request, String date) throws  IOException {
-            System.out.println("Get detected");
-
-            //Check if file already exists
-            File htmlFile = new File("src" + request[1]);
-            if(!htmlFile.exists() || htmlFile.isDirectory()) {
-                out.writeBytes("404 Not found");
+                out.writeBytes("404 Not found\r\n");
                 //Throw error
             }
 
             String htmlString = FileUtils.readFileToString(htmlFile);
 
             //output headers
-            out.writeBytes("Content-Type: " + "\n");
-            out.writeBytes("Content-Length: " + htmlString.length() + "\n");
-            out.writeBytes("Date: " + date + "\n");
-            out.writeBytes("\n");
+            out.writeBytes(request[2] + " 200 OK\r\n");
+            out.writeBytes("Content-Type: " + "\r\n");
+            out.writeBytes("Content-Length: " + htmlString.length() + "\r\n");
+            out.writeBytes("Date: " + date + "\r\n");
+            out.writeBytes("\r\n");
+
+        };
+
+        private void get(DataOutputStream out, String[] request, String date) throws  IOException {
+            //Check if file already exists
+            File htmlFile = new File("src" + request[1]);
+            if(!htmlFile.exists() || htmlFile.isDirectory()) {
+                out.writeBytes("404 Not found\r\n");
+                //Throw error
+            }
+
+            String htmlString = FileUtils.readFileToString(htmlFile);
+
+            //output headers
+            out.writeBytes(request[2] + " 200 OK\r\n");
+            out.writeBytes("Content-Type: " + "\r\n");
+            out.writeBytes("Content-Length: " + htmlString.length() + "\r\n");
+            out.writeBytes("Date: " + date + "\r\n");
+            out.writeBytes("\r\n");
 
             //output requested file
             out.writeBytes(htmlString);
         };
 
         private void put(DataOutputStream out, String[] request, String date) throws  IOException {
-            System.out.println("Put detected");
-            String response = " 200 OK\n";
+
+            String response = " 200 OK\r\n";
 
             //Check if file already exists
             File htmlFile = new File("src" + request[1]);
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
-                response = " 201 Created\n";
+                response = " 201 Created\r\n";
             }
 
             out.writeBytes(request[2] + response);
-            out.writeBytes("Content Location: src" + request[1]);
-            out.writeBytes("Date: " + date + "\n");
-            out.writeBytes("\n");
+            out.writeBytes("Content Location: src" + request[1] + "\r\n");
+            out.writeBytes("Date: " + date + "\r\n");
+            out.writeBytes("\r\n");
         };
 
         private void post(DataOutputStream out, String[] request, String date) throws  IOException {
-            System.out.println("Post detected");
-
             //Check if file already exists
             File htmlFile = new File("src" + request[1]);
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
-                out.writeBytes("404 Not found");
+                out.writeBytes("404 Not found\r\n");
                 //Throw error
             }
 
-            out.writeBytes("Host: localhost");
-            out.writeBytes("Content-Type: ");
-            out.writeBytes("Content-Length: ");
-            out.writeBytes("Date: " + date + "\n");
-            out.writeBytes("\n");
+            out.writeBytes("Host: localhost\r\n");
+            out.writeBytes("Content-Type: \r\n");
+            out.writeBytes("Content-Length: " + "\r\n");
+            out.writeBytes("Date: " + date + "\r\n");
+            out.writeBytes("\r\n");
 
         };
 
         private  void delete(DataOutputStream out, String[] request, String date) throws  IOException {
-            System.out.println("Delete detected");
-
             //Check if file already exists
             File htmlFile = new File("src" + request[1]);
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
-                out.writeBytes("404 Not found");
+                out.writeBytes("404 Not found\r\n");
                 //Throw error
             }
 
@@ -207,8 +200,8 @@ class TCPServer
             File message = new File("src/deletemessage.html");
             String confirmdelete = FileUtils.readFileToString(message);
 
-            out.writeBytes("Date: " + date + "\n");
-            out.writeBytes("\n");
+            out.writeBytes("Date: " + date + "\r\n");
+            out.writeBytes("\r\n");
 
             //output delete message
             out.writeBytes(confirmdelete);
