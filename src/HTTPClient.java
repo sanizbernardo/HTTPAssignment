@@ -20,9 +20,7 @@ class HTTPClient {
         /*
          * Variables
          */
-        boolean ended = false;
-        String substr = "";
-        String byteString= "H";
+
         String fullText;
         String htmlText;
 
@@ -66,6 +64,7 @@ class HTTPClient {
         // Incoming HTTP command from request is GET, so calling get method with
         // correct path and data output stream
         if (HTTPCommand.equals("GET")) {
+            System.out.println("GET");
             Get(path,outToServer,"/");
         }
 
@@ -76,12 +75,12 @@ class HTTPClient {
 
         // Incoming HTTP command from request is PUT
         else if (HTTPCommand.equals("PUT")) {
-            Put(path,outToServer,"/");
+            PutOrPost(HTTPCommand,path,outToServer);
         }
 
         // Incoming HTTP command from request is POST
         else if (HTTPCommand.equals("POST")) {
-            Post(path,outToServer,"/");
+            PutOrPost(HTTPCommand,path,outToServer);
         }
 
         else if(HTTPCommand.equals("DELETE")) {
@@ -162,11 +161,10 @@ class HTTPClient {
 
         // If the method above has found any images, loop through all the found images and call up getImage method on every image
         // to convert the bytes of the images in inputStream into files.
-        System.out.println("Images: "+getImages(htmlText));
         if (getImages(htmlText).size() != 0) {
             for (String img: getImages(htmlText)) {
-                System.out.println("Image1: "+img);
-                getImage(img, path, inputStream, outToServer);
+                if (img.length() != 0)
+                    getImage(img, path, inputStream, outToServer);
             }
         }
 
@@ -192,40 +190,79 @@ class HTTPClient {
     }
 
     /**
-     * This method sends the HTTP command GET out to the server with the provided path and resource.
+     * This method sends the HTTP command GET out to the server with the provided host and resource.
      * This is all done in HTTP 1.1
-     * @param path
+     * @param host
      * @param outToServer
      * @param resource
      * @throws IOException
      */
-    public static void Get(String path,DataOutputStream outToServer,String resource) throws IOException
+    public static void Get(String host,DataOutputStream outToServer,String resource) throws IOException
     {
         outToServer.writeBytes("GET "+resource+" HTTP/1.1\r\n");
-        outToServer.writeBytes("Host: "+path+"\r\n");
+        outToServer.writeBytes("Host: "+host+"\r\n");
         outToServer.writeBytes("\r\n");
     }
 
-    public static void Head(String path, DataOutputStream outToServer,String resource) throws IOException
+    /**
+     * This method sends the HTTP command HEAD out to the server with the provided
+     * @param host
+     * @param outToServer
+     * @param resource
+     * @throws IOException
+     */
+    public static void Head(String host, DataOutputStream outToServer,String resource) throws IOException
     {
         outToServer.writeBytes("HEAD "+resource+" HTTP/1.1\r\n");
-        outToServer.writeBytes("Host: "+path+"\r\n");
+        outToServer.writeBytes("Host: "+host+"\r\n");
         outToServer.writeBytes("\r\n");
     }
 
-    public static void Put(String path, DataOutputStream outToServer, String resource)
-    {
-        //String userInput = System.in;
+    /**
+     * This method will be used for the HTTP commands PUT and POST since the server expect the same input
+     * in both cases.
+     * First, it writes to the server either a PUT or a POST commando.
+     * Then it asks for the host, afterwards it asks for the content type and next it asks for the content length.
+     * At last it asks as input from the user the content to be PUT or POSTed on the server.
+     * @param putOrPost
+     * @param path
+     * @param outToServer
+     * @throws IOException
+     */
+    public static void PutOrPost(String putOrPost,String path, DataOutputStream outToServer) throws IOException {
+        byte[] userIn = new byte[4096];
+        int chunk;
+        String userinput;
+        outToServer.writeBytes(putOrPost +" /"+path+" HTTP/1.1\r\n");
+        System.out.print("Host: ");
+        chunk = System.in.read(userIn);
+        userinput = new String(userIn, StandardCharsets.UTF_8);
+        outToServer.writeBytes("Host: "+userinput.substring(0,chunk)+"\r\n");
+        System.out.print("Content-type: ");
+        chunk = System.in.read(userIn);
+        userinput = new String(userIn, StandardCharsets.UTF_8);
+        outToServer.writeBytes("Content-type: "+userinput.substring(0,chunk)+"\r\n");
+        System.out.print("Content-length: ");
+        chunk = System.in.read(userIn);
+        userinput = new String(userIn, StandardCharsets.UTF_8);
+        outToServer.writeBytes("Content-length: "+userinput.substring(0,chunk)+"\r\n");
+        outToServer.writeBytes("\r\n");
+        System.out.println("Please input the content: ");
+        chunk = System.in.read(userIn);
+        userinput = new String(userIn, StandardCharsets.UTF_8);
+        outToServer.writeBytes(userinput.substring(0,chunk)+"\r\n");
     }
 
-    public static void Post(String path, DataOutputStream outToServer, String resource)
-    {
-
-    }
-
-    public static void Delete(String path, DataOutputStream outToServer, String resource) throws IOException {
-        outToServer.writeBytes("DELETE /"+resource+" HTTP/1.1");
-        outToServer.writeBytes("Host: "+path+"\r\n");
+    /**
+     * This method deletes a given file from the server.
+     * @param host
+     * @param outToServer
+     * @param file
+     * @throws IOException
+     */
+    public static void Delete(String host, DataOutputStream outToServer, String file) throws IOException {
+        outToServer.writeBytes("DELETE /"+file+" HTTP/1.1");
+        outToServer.writeBytes("Host: "+host+"\r\n");
         outToServer.writeBytes("\r\n");
     }
 
@@ -310,22 +347,12 @@ class HTTPClient {
      */
     public static void getImage(String image, String host, InputStream inputStream,DataOutputStream outToServer) throws IOException {
         // Initialize some variables that will be needed in this method
-        String contentLenString = "";
-        //String contentLen = "";
-        boolean con = false;
         byte [] bytes = new byte [1];
         // Send out the GET request to the server
-        System.out.println("GetImage: "+image);
-        outToServer.writeBytes("GET /"+image+" HTTP/1.1\r\n");
-        outToServer.writeBytes("Host: "+host+"\r\n");
-        outToServer.writeBytes("\r\n");
-        //inputStream.read(bytes);
+        Get(host,outToServer,"/"+image);
 
-        // This part reads the header from the response of the GET request, so that the bytes
-        // of the header won't be included while reading the bytes to makethe image file.
-        // It checks whether the bytes are UTF-8, if this is the case then we are still in the
-        // header.
-        // This method also searches for the content length that is provided in the header. (Content length of the image requested)
+        // This part of the method checks for the combination of bytes 13 10 13 10 in this order. This combination
+        // signals for the end of the header and the begin of the actual response from the GET command.
         int length;
         String line = "";
         String contentLength = "";
@@ -334,10 +361,8 @@ class HTTPClient {
         boolean nBool1 = false;
         boolean nBool2 = false;
         while((length = inputStream.read(bytes)) != -1) {
-            //System.out.println("LOL");
             line += new String(bytes,0,length);
             for (byte b: bytes){
-
                 if (b == 13)
                     rBool1 = true;
                 if (b == 10 && rBool1)
@@ -355,9 +380,9 @@ class HTTPClient {
             }
             if (rBool1 && rBool2 && nBool1 && nBool2)
                 break;
-
         }
-        System.out.println(line);
+
+        // This part searches for the content length in the header.
         outerloop:
         for (int i = 0; i< line.length()-15;i++) {
             if (line.substring(i,i+15).equals("Content-Length:")) {
@@ -368,49 +393,30 @@ class HTTPClient {
                         contentLength += line.charAt(j);
                     }
                 }
-
             }
-
         }
-        System.out.println("CONTENTLENGTH: "+contentLength);
 
-        // Using the content byte and checking if the next byte does not look like UTF-8,
-        // we start reading the input stream and write byte per byte to a file that will contain the image requested at the end
+        // If the image from the server is stored in another folder than the source, a new directory will be created inside source.
         int j = 0;
         if (detectPathImg(image) != null) {
-            new File(detectPathImg("src/"+image)[0]).mkdirs();
-            //image = detectPathImg(image)[1];
+            new File(detectPathImg("src/"+image)).mkdirs();
         }
-
 
         FileOutputStream fos = new FileOutputStream("src/"+image);
-        //fos.write(bytes);
         int contentLen = Integer.parseInt(contentLength);
-        //byte [] htmlByte = new byte[Math.min(4096,contentLen)];
-        byte [] htmlByte = new byte[100];
-
+        byte [] htmlByte = new byte[4096];
         int chunk =inputStream.read(htmlByte);
+
         // This loop will keep looping as long as there is data in the input stream and the amount of iterations won't exceed the
         // content length that was found in the header.
-        System.out.println("-----------------Begin write-------------");
         while (chunk != -1)  {
-            for (byte b:htmlByte)
-               System.out.println(b);
-            System.out.println("Chunk: "+chunk+" j: "+j+" Contentlen: "+contentLen+" contentlen -j: "+(contentLen-j)+" htmlByte: "+htmlByte.length);
-
-            fos.write(htmlByte);
+            fos.write(htmlByte,0,chunk);
             j+= chunk;
             if (j >= contentLen) {
-                System.out.println("------------------J: "+j+" Chunk: "+chunk+" contentlength: "+contentLen);
                 break;
             }
-            if ((contentLen-j) < chunk) {
-                htmlByte = new byte[contentLen - j];
-            }
             chunk = inputStream.read(htmlByte);
-
-            //System.out.println("Chunk, read: "+(chunk = inputStream.read(htmlByte))+" J: "+j+" contentlength: "+contentLen);
-        }
+            }
 
 
         outToServer.flush();
@@ -419,29 +425,10 @@ class HTTPClient {
     }
 
     /**
-     * This method takes in a byte array and checks whether the elements in the byte array look like UTF-8 elements and returns
-     * a boolean.
-     * @param utf8
+     * This method uses jsoup to parse the document and searches for img tags inside the html document and returns an arraylist of all the images.
+     * @param html
      * @return
-     * @throws UnsupportedEncodingException
      */
-    static boolean looksLikeUTF8(byte[] utf8) throws UnsupportedEncodingException
-    {
-        Pattern p = Pattern.compile("\\A(\n" +
-                "  [\\x09\\x0A\\x0D\\x20-\\x7E]             # ASCII\\n" +
-                "| [\\xC2-\\xDF][\\x80-\\xBF]               # non-overlong 2-byte\n" +
-                "|  \\xE0[\\xA0-\\xBF][\\x80-\\xBF]         # excluding overlongs\n" +
-                "| [\\xE1-\\xEC\\xEE\\xEF][\\x80-\\xBF]{2}  # straight 3-byte\n" +
-                "|  \\xED[\\x80-\\x9F][\\x80-\\xBF]         # excluding surrogates\n" +
-                "|  \\xF0[\\x90-\\xBF][\\x80-\\xBF]{2}      # planes 1-3\n" +
-                "| [\\xF1-\\xF3][\\x80-\\xBF]{3}            # planes 4-15\n" +
-                "|  \\xF4[\\x80-\\x8F][\\x80-\\xBF]{2}      # plane 16\n" +
-                ")*\\z", Pattern.COMMENTS);
-
-        String phonyString = new String(utf8, "ISO-8859-1");
-        return p.matcher(phonyString).matches();
-    }
-
     public static ArrayList<String> getImages(String html) {
         ArrayList<String> images = new ArrayList<>();
         Document doc = Jsoup.parse(html);
@@ -449,20 +436,20 @@ class HTTPClient {
         // Get all img tags
         Elements img = doc.getElementsByTag("img");
 
-        int counter = 0;
-
         // Loop through img tags
         for (Element el : img) {
-            // If alt is empty or null, add one to counter
-            if(el.attr("alt") == null || el.attr("alt").equals("")) {
-                counter++;
-            }
             images.add(el.attr("src"));
+            images.add(el.attr("lowsrc"));
         }
         return images;
     }
 
-    public static String [] detectPathImg(String image) {
+    /**
+     * This method searches for the directory of the provided image if it's in another directory and returns the directory of the image.
+     * @param image
+     * @return
+     */
+    public static String detectPathImg(String image) {
         String [] str = new String [2];
         int i =0;
         if (image.contains("/")) {
@@ -474,9 +461,8 @@ class HTTPClient {
         if (i == 0)
             return null;
         else {
-            str[0]  =image.substring(0, i + 1);
-            str[1] = image.substring(i+1,image.length());
-            return str;
+            return image.substring(0, i + 1);
+
         }
     }
 

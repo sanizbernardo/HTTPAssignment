@@ -11,7 +11,7 @@ class TCPServer
 {
     public static void main(String argv[]) throws Exception
     {
-        ServerSocket welcomeSocket = new ServerSocket(80);
+        ServerSocket welcomeSocket = new ServerSocket(6938);
         int i = 0;
 
         // always true -> server remains active
@@ -40,6 +40,7 @@ class TCPServer
         public void run()
         {
             try {
+
                 BufferedReader inFromClient = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 DataOutputStream outToClient = new DataOutputStream(socket.getOutputStream());
 
