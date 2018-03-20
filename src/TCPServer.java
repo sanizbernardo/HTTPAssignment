@@ -1,4 +1,5 @@
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.FilenameUtils;
 
 import java.io.*;
 import java.net.*;
@@ -101,6 +102,9 @@ class TCPServer
                             if (line.equals("Host: localhost")) {
                                 hostgiven = true;
                             }
+                            if (line.equals("Connection: close")) {
+                                running.set(false);
+                            }
                         }
                         if (!hostgiven) {
                             outToClient.writeBytes("400 Bad Request\n");
@@ -152,7 +156,7 @@ class TCPServer
             //Check if file already exists
             File htmlFile = new File("src" + request[1]);
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
-                out.writeBytes("404 Not found\r\n");
+                out.writeBytes(request[2] + " 404 Not found\r\n");
                 out.writeBytes("\r\n");
                 return;
             }
@@ -166,12 +170,12 @@ class TCPServer
                         try {
                             reqdate = dateFormat.parse(line.substring(19));
                         } catch(Exception e) {
-                            out.writeBytes("400 Bad Request\r\n");
+                            out.writeBytes(request[2] + " 400 Bad Request\r\n");
                             out.writeBytes("\r\n");
                             return;
                         }
                         if (moddate.compareTo(reqdate) > 0) {
-                            out.writeBytes("304 Not Modified\r\n");
+                            out.writeBytes(request[2] + " 304 Not Modified\r\n");
                             out.writeBytes("\r\n");
                             return;
                         }
@@ -183,7 +187,7 @@ class TCPServer
 
             //output headers
             out.writeBytes(request[2] + " 200 OK\r\n");
-            out.writeBytes("Content-Type: " + "\r\n");
+            out.writeBytes("Content-Type: " + FilenameUtils.getExtension("src" + request[1]) + "\r\n");
             out.writeBytes("Content-Length: " + htmlString.length() + "\r\n");
             out.writeBytes("Date: " + date + "\r\n");
             out.writeBytes("\r\n");
@@ -193,7 +197,7 @@ class TCPServer
              //Check if file already exists
             File htmlFile = new File("src" + request[1]);
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
-                out.writeBytes("404 Not found\r\n");
+                out.writeBytes(request[2] + " 404 Not found\r\n");
                 out.writeBytes("\r\n");
                 return;
             }
@@ -207,12 +211,12 @@ class TCPServer
                         try {
                             reqdate = dateFormat.parse(line.substring(19));
                         } catch(Exception e) {
-                            out.writeBytes("400 Bad Request\r\n");
+                            out.writeBytes(request[2] + " 400 Bad Request\r\n");
                             out.writeBytes("\r\n");
                             return;
                         }
                         if (moddate.compareTo(reqdate) > 0) {
-                            out.writeBytes("304 Not Modified\r\n");
+                            out.writeBytes(request[2] + " 304 Not Modified\r\n");
                             out.writeBytes("\r\n");
                             return;
                         }
@@ -224,7 +228,7 @@ class TCPServer
 
             //output headers
             out.writeBytes(request[2] + " 200 OK\r\n");
-            out.writeBytes("Content-Type: " + "\r\n");
+            out.writeBytes("Content-Type: " + FilenameUtils.getExtension("src" + request[1]) + "\r\n");
             out.writeBytes("Content-Length: " + htmlString.length() + "\r\n");
             out.writeBytes("Date: " + date + "\r\n");
             out.writeBytes("\r\n");
@@ -240,7 +244,7 @@ class TCPServer
             //Check if file already exists
             File htmlFile = new File("src" + request[1]);
             if (request[1].equals("index.html") || request[1].equals("template.html") || request[1].equals("deletemessage.html")) {
-                out.writeBytes("403 Forbidden\r\n");
+                out.writeBytes(request[2] + " 403 Forbidden\r\n");
                 out.writeBytes("\r\n");
                 return;
             }else if(!htmlFile.exists() || htmlFile.isDirectory()) {
@@ -269,9 +273,9 @@ class TCPServer
 
         private void post(BufferedReader in, DataOutputStream out, String[] request, String date) throws  IOException {
             //Check if file already exists
-            File htmlFile = new File("src" + request[1]);
-            if(!htmlFile.exists() || htmlFile.isDirectory()) {
-                out.writeBytes("404 Not found\r\n");
+            File file = new File("src" + request[1]);
+            if(!file.exists() || file.isDirectory()) {
+                out.writeBytes(request[2] + " 404 Not found\r\n");
                 out.writeBytes("\r\n");
                 return;
             }
@@ -291,7 +295,7 @@ class TCPServer
             }
 
             out.writeBytes("Host: localhost\r\n");
-            out.writeBytes("Content-Type: \r\n");
+            out.writeBytes("Content-Type:" + FilenameUtils.getExtension("src" + request[1]) + "\r\n");
             out.writeBytes("Content-Length: " + body.length() + "\r\n");
             out.writeBytes("Date: " + date + "\r\n");
             out.writeBytes("\r\n");
@@ -299,23 +303,24 @@ class TCPServer
 
         private  void delete(BufferedReader in, DataOutputStream out, String[] request, String date) throws  IOException {
             //Check if file already exists
-            File htmlFile = new File("src" + request[1]);
+            File file = new File("src" + request[1]);
 
             if (request[1].equals("/index.html") || request[1].equals("/template.html") || request[1].equals("/deletemessage.html")) {
-                out.writeBytes("403 Forbidden\r\n");
+                out.writeBytes(request[2] + " 403 Forbidden\r\n");
                 out.writeBytes("\r\n");
                 return;
-            } else if (!htmlFile.exists() || htmlFile.isDirectory()) {
-                out.writeBytes("404 Not found\r\n");
+            } else if (!file.exists() || file.isDirectory()) {
+                out.writeBytes(request[2] + " 404 Not found\r\n");
                 out.writeBytes("\r\n");
                 return;
             }
 
-            if (htmlFile.delete()) {
+            if (file.delete()) {
                 //Fetch delete message
                 File message = new File("src/deletemessage.html");
                 String confirmdelete = FileUtils.readFileToString(message);
 
+                out.writeBytes(request[2] + " 200 OK\r\n");
                 out.writeBytes("Date: " + date + "\r\n");
                 out.writeBytes("\r\n");
 
