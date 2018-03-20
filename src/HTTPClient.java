@@ -69,7 +69,7 @@ class HTTPClient {
             // Creating new html template
             File htmlTemplateFile = new File("src/template.html");
             String request = "";
-            String resource = "/get";
+            String resource = "/";
             while (true) {
                 try {
                     /*
@@ -78,6 +78,7 @@ class HTTPClient {
                     Scanner scanner = new Scanner(System.in);
                     String fullText;
                     String htmlText;
+                    String header;
 
                     /*
                      * Check if this is the first iteration or if the user has submitted a new request. If the user has submitted a new request,
@@ -87,9 +88,8 @@ class HTTPClient {
                         ArrayList<String> args=parseRequest(request);
                         HTTPCommand = args.get(0);
                         resource = args.get(1);
-                        request = "";
+                        request = "/";
                     }
-                    System.out.println("HTTP Command: "+HTTPCommand+" Resource: "+resource);
 
                     // Creating byte array for incoming bytes
                     byte[] bytes = new byte[100];
@@ -125,23 +125,19 @@ class HTTPClient {
                      * Convert the bytes from input stream to string
                      */
 
-                    //Calling up the method to cast bytes of input stream to string
-                    fullText = byteToString(bytes, inputStream);
+                    // Looking for header in inputstream until byte 13 10 13 10
+                    header = splitUpHeaderRest(new byte[1],inputStream);
 
-                    //Sometimes the inputStream.available() does not see all the data immediately, so we check if we have all the
-                    //data for our html file with ends in </HTML> or </html>, if the String does not contain one of these two elements
-                    // then we keep converting bytes of inputStream to String and add the result onto the existing string until it contains one
-                    // of the two html elements.
-
-                    if (HTTPCommand.equals("GET")) {
-                        while (!(fullText.contains("</HTML>") || fullText.contains("</html>"))) {
-                            fullText += byteToString(bytes, inputStream);
-                        }
-                    }
+                    //Determine the content length from the header for reading our html part from the inputstream
+                    int contentLen = findContentLen(header);
 
 
-                    //Find the html text part of the response from the HTTP Command
-                    htmlText = searchForHtml(fullText);
+                    // Looking for html part of input stream after header until inputstream is empty and convert bytes to string
+                    htmlText = byteToString(bytes, inputStream,contentLen);
+                    // Add header and html part together
+                    fullText = header;
+                    fullText += htmlText;
+
 
                     /*
                      * Parsing
@@ -171,7 +167,7 @@ class HTTPClient {
 
                     //We print the header of the response of the HTTP Command to the terminal.
                     if (HTTPCommand.equals("GET"))
-                        System.out.println(searchForHeader(fullText));
+                        System.out.println(header);
                     else if (HTTPCommand.equals("HEAD"))
                         System.out.println(fullText);
 
@@ -179,7 +175,7 @@ class HTTPClient {
                     // Use the found parameters of the title and body part of the html part and take these out of the string so we can
                     // replace the title and body part of the html template to create our own template.
                     String htmlString = FileUtils.readFileToString(htmlTemplateFile);
-                    String title = htmlText.substring(titleStart, titleEnd);
+                    String title = htmlText.substring(titleStart, titleEnd);;
                     String body = htmlText.substring(bodyStart, bodyEnd);
                     htmlString = htmlString.replace("$title", title);
                     htmlString = htmlString.replace("$body", body);
@@ -217,6 +213,8 @@ class HTTPClient {
          */
         void Get(String host,DataOutputStream outToServer,String resource) throws IOException
         {
+            if (host.contains("httpbin.org"))
+                resource ="/get";
             outToServer.writeBytes("GET "+resource+" HTTP/1.1\r\n");
             outToServer.writeBytes("Host: "+host+"\r\n");
             outToServer.writeBytes("\r\n");
@@ -292,18 +290,21 @@ class HTTPClient {
          * @return
          * @throws IOException
          */
-        String byteToString(byte[] bytes,InputStream inputStream) throws IOException
+        String byteToString(byte[] bytes,InputStream inputStream,int contentLen) throws IOException
         {
             String byteString = "";
-            int chunk;
+            int j = 0;
+            int chunk = inputStream.read(bytes);
 
-            chunk = inputStream.read(bytes);
-            while (chunk > 0 && inputStream.available() > 0) {
-                byteString+= (new String(bytes,StandardCharsets.UTF_8)).substring(0,chunk);
+            while (chunk != -1)  {
+                String substr = new String(bytes,StandardCharsets.UTF_8).substring(0,chunk);
+                byteString += substr;
+                j+= chunk;
+                if (j >= contentLen) {
+                    break;
+                }
                 chunk = inputStream.read(bytes);
             }
-            if (chunk > 0)
-                byteString+= (new String(bytes,StandardCharsets.UTF_8)).substring(0,chunk);
 
             return byteString;
 
@@ -327,24 +328,45 @@ class HTTPClient {
             return header;
         }
 
-        /**
-         * This method searches for the html text of response of the HTTP Command, the response contains
-         * a header part and a http text part.
-         * @param fullText
-         * @return
-         */
 
-        String searchForHtml(String fullText)
-        {
-            String html = "";
-            for (int i=0;i <fullText.length();i++) {
-                if (fullText.substring(0, i).contains("<HTML>") || fullText.substring(0, i).contains("<html>")) {
-                    html = fullText.substring(i - 6, fullText.length());
+        String splitUpHeaderRest(byte [] bytes,InputStream inputStream) throws IOException {
+            boolean rBool1 = false;
+            boolean rBool2 = false;
+            boolean nBool1 = false;
+            boolean nBool2 = false;
+            int length;
+            String line = "";
+            while((length = inputStream.read(bytes)) != -1) {
+                line += new String(bytes,0,length);
+                for (byte b: bytes){
+                    if (b == 13 && !rBool1) {
+                        rBool1 = true;
+                    }
+                    else if (b == 10 && rBool1 && !nBool1) {
+                        nBool1 = true;
+                    }
+                    else if (b == 13 && rBool1 && nBool1 && !rBool2) {
+                        rBool2 = true;
+                    }
+                    else if (b == 10 && rBool1 && nBool1 && rBool2 && !nBool2) {
+                        nBool2 = true;
+                        break;
+                    }
+                    else if (b != 13 || b != 10) {
+                        rBool1 = false;
+                        rBool2 = false;
+                        nBool1 = false;
+                        nBool2 = false;
+                    }
+                }
+                if (rBool1 && rBool2 && nBool1 && nBool2) {
                     break;
                 }
             }
-            return html;
+            return line;
         }
+
+
 
         /**
          * This method sends out a GET command for the given image to the given host,
@@ -364,48 +386,10 @@ class HTTPClient {
 
             // This part of the method checks for the combination of bytes 13 10 13 10 in this order. This combination
             // signals for the end of the header and the begin of the actual response from the GET command.
-            int length;
-            String line = "";
-            String contentLength = "";
-            boolean rBool1 = false;
-            boolean rBool2 = false;
-            boolean nBool1 = false;
-            boolean nBool2 = false;
-            while((length = inputStream.read(bytes)) != -1) {
-                line += new String(bytes,0,length);
-                for (byte b: bytes){
-                    if (b == 13)
-                        rBool1 = true;
-                    if (b == 10 && rBool1)
-                        nBool1 = true;
-                    if (b == 13 && rBool1 && nBool1)
-                        rBool2 = true;
-                    if (b == 10 && rBool1 && nBool1 && rBool2)
-                        nBool2 = true;
-                    if (b != 13 && b != 10) {
-                        rBool1 = false;
-                        rBool2 = false;
-                        nBool1 = false;
-                        nBool2 = false;
-                    }
-                }
-                if (rBool1 && rBool2 && nBool1 && nBool2)
-                    break;
-            }
+            String line = splitUpHeaderRest(bytes,inputStream);
 
             // This part searches for the content length in the header.
-            outerloop:
-            for (int i = 0; i< line.length()-15;i++) {
-                if (line.substring(i,i+15).equals("Content-Length:")) {
-                    for (int j = i+15;j < line.length();j++) {
-                        if (line.charAt(j) == 'C')
-                            break outerloop;
-                        if (Character.toString(line.charAt(j)).matches("-?\\d+")) {
-                            contentLength += line.charAt(j);
-                        }
-                    }
-                }
-            }
+            int contentLen = findContentLen(line);
 
             // If the image from the server is stored in another folder than the source, a new directory will be created inside source.
             if (detectPathImg(image) != null) {
@@ -413,7 +397,6 @@ class HTTPClient {
             }
 
             FileOutputStream fos = new FileOutputStream("src/"+image);
-            int contentLen = Integer.parseInt(contentLength);
             byte [] htmlByte = new byte[4096];
             int chunk =inputStream.read(htmlByte);
 
@@ -524,6 +507,25 @@ class HTTPClient {
             if (j < i)
                 args.add(request.substring(j,i));
             return args;
+        }
+
+        int findContentLen(String line) {
+            String contentLength = "";
+            boolean cond = false;
+            outerloop:
+            for (int i = 0; i< line.length()-15;i++) {
+                if (line.substring(i,i+15).equals("Content-Length:")) {
+                    for (int j = i+15;j < line.length();j++) {
+                        if (Character.toString(line.charAt(j)).matches("-?\\d+") && cond)
+                            break outerloop;
+                        if (Character.toString(line.charAt(j)).matches("-?\\d+")) {
+                            contentLength += line.charAt(j);
+                            cond = true;
+                        }
+                    }
+                }
+            }
+            return Integer.parseInt(contentLength);
         }
 
 
