@@ -3,8 +3,6 @@ import org.apache.commons.io.FileUtils;
 import java.io.*;
 import java.net.*;
 import java.text.SimpleDateFormat;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -46,54 +44,69 @@ class TCPServer
                 BufferedReader inFromClient = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 DataOutputStream outToClient = new DataOutputStream(socket.getOutputStream());
 
-                boolean requestcomplete = false;
-                List<String> input = new ArrayList<String>();
-                 while (!requestcomplete) {
-                     String inputline = inFromClient.readLine();
-                     if (inputline.equals("")) {
-                         requestcomplete = true;
-                     }
-                     input.add(inputline);
-                 }
+                outToClient.writeBytes("Connected\r\n");
+                AtomicBoolean running = new AtomicBoolean(true);
 
-                String[] lines = new String[input.size()];
-                input.toArray(lines);
-                 //Split request line into method, target file and http version
-                String[] requestline = lines[0].split("\\s+");
+                while (running.get()){
+                    boolean requestcomplete = false;
 
-                if (requestline[1].equals("/")) {
-                    requestline[1] = "/index.html";
-                }
-                 //Check if request is valid, give error message otherwise
-                if (!isValidRequest(requestline)) {
-                    outToClient.writeBytes("400 Bad Request\r\n");
-                }
+                    List<String> input = new ArrayList<String>();
+                    while (!requestcomplete) {
+                         String inputline = inFromClient.readLine();
+                        if (inputline.equals("")) {
+                             requestcomplete = true;
+                        }
+                        input.add(inputline);
+                    }
 
-                //get current date
-                Calendar calendar = Calendar.getInstance();
-                dateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
-                String date = dateFormat.format(calendar.getTime());
+                    String[] lines = new String[input.size()];
+                    input.toArray(lines);
+                     //Split request line into method, target file and http version
+                   String[] requestline = lines[0].split("\\s+");
 
-                //Choose correct method
-                switch (requestline[0]) {
-                    case "HEAD":
-                        head(outToClient, requestline, lines, date);
-                        break;
-                    case "GET":
-                        get(outToClient, requestline, lines, date);
-                        break;
-                    case "PUT":
-                        put(outToClient, requestline, date);
-                        break;
-                    case "POST":
-                        post(outToClient, requestline, date);
-                        break;
-                    case "DELETE":
-                        delete(outToClient, requestline, date);
-                        break;
-                    default:
-                        outToClient.writeBytes("400 Bad Request\r\n");
-                        break;
+                    if (requestline[1].equals("/")) {
+                        requestline[1] = "/index.html";
+                    }
+
+                    if (requestline.length == 2) {
+                        requestline[2] = "HTTP/1.0";
+                    }
+
+                     //Check if request is valid, give error message otherwise
+                    if (!isValidRequest(requestline)) {
+                        System.out.println("Failed validity");
+                        outToClient.writeBytes("400 Bad Request\n");
+                        outToClient.writeBytes("\r\n");
+                        return;
+                    }
+
+                    //get current date
+                    Calendar calendar = Calendar.getInstance();
+                   dateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
+                    String date = dateFormat.format(calendar.getTime());
+
+                    //Choose correct method
+                    switch (requestline[0]) {
+                        case "HEAD":
+                            head(outToClient, requestline, lines, date);
+                            break;
+                        case "GET":
+                            get(outToClient, requestline, lines, date);
+                            break;
+                        case "PUT":
+                            put(inFromClient, outToClient, requestline, date);
+                            break;
+                        case "POST":
+                            post(inFromClient, outToClient, requestline, date);
+                            break;
+                        case "DELETE":
+                            delete(inFromClient, outToClient, requestline, date);
+                            break;
+                        default:
+                            System.out.println("Failed to recognise method");
+                            outToClient.writeBytes("400 Bad Request\n");
+                            outToClient.writeBytes("\r\n");
+                    }
                 }
             } catch(IOException e) {
 
@@ -105,10 +118,8 @@ class TCPServer
 
             //Request always contains method and file. Http version is optional, default to HTTP 1.0. Never more than 3
             //arguments in request line
-            if (request.length < 2 || request.length > 3) {
+            if (request.length != 3) {
                 b = false;
-            } else if (request.length ==  2) {
-                request[2] = "HTTP/1.0";
             } else if (!request[2].equals("HTTP/1.1")) {
                 b = false;
             }
@@ -116,12 +127,14 @@ class TCPServer
             return  b;
         };
 
-        private String head(DataOutputStream out, String[] request, String[] lines, String date) throws  IOException {
+        private void head(DataOutputStream out, String[] request, String[] lines, String date) throws  IOException {
             System.out.println("Head detected");
             //Check if file already exists
             File htmlFile = new File("src" + request[1]);
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
                 out.writeBytes("404 Not found\r\n");
+                out.writeBytes("\r\n");
+                return;
             }
 
             Date moddate = new Date(htmlFile.lastModified());
@@ -134,9 +147,55 @@ class TCPServer
                             reqdate = dateFormat.parse(line.substring(19));
                         } catch(Exception e) {
                             out.writeBytes("400 Bad Request\r\n");
+                            out.writeBytes("\r\n");
+                            return;
                         }
                         if (moddate.compareTo(reqdate) > 0) {
                             out.writeBytes("304 Not Modified\r\n");
+                            out.writeBytes("\r\n");
+                            return;
+                        }
+                    }
+                }
+            }
+
+            String htmlString = FileUtils.readFileToString(htmlFile);
+
+            //output headers
+            out.writeBytes(request[2] + " 200 OK\r\n");
+            out.writeBytes("Content-Type: " + "\r\n");
+            out.writeBytes("Content-Length: " + htmlString.length() + "\r\n");
+            out.writeBytes("Date: " + date + "\r\n");
+            out.writeBytes("\r\n");
+        };
+
+        private void get(DataOutputStream out, String[] request, String[] lines, String date) throws  IOException {
+            System.out.println("Get detected");
+             //Check if file already exists
+            File htmlFile = new File("src" + request[1]);
+            if(!htmlFile.exists() || htmlFile.isDirectory()) {
+                out.writeBytes("404 Not found\r\n");
+                out.writeBytes("\r\n");
+                return;
+            }
+
+            Date moddate = new Date(htmlFile.lastModified());
+
+            for (String line : lines) {
+                if (line.length() > 18){
+                    if (line.substring(0, 18).equals("If-Modified-Since:")) {
+                        Date reqdate = new Date();
+                        try {
+                            reqdate = dateFormat.parse(line.substring(19));
+                        } catch(Exception e) {
+                            out.writeBytes("400 Bad Request\r\n");
+                            out.writeBytes("\r\n");
+                            return;
+                        }
+                        if (moddate.compareTo(reqdate) > 0) {
+                            out.writeBytes("304 Not Modified\r\n");
+                            out.writeBytes("\r\n");
+                            return;
                         }
                     }
                 }
@@ -151,19 +210,11 @@ class TCPServer
             out.writeBytes("Date: " + date + "\r\n");
             out.writeBytes("\r\n");
 
-            return htmlString;
-        };
-
-        private void get(DataOutputStream out, String[] request, String[] lines, String date) throws  IOException {
-            System.out.println("Get detected");
-
-            String htmlString = head(out, request, lines, date);
-
             //output requested file
             out.writeBytes(htmlString);
         };
 
-        private void put(DataOutputStream out, String[] request, String date) throws  IOException {
+        private void put(BufferedReader in, DataOutputStream out, String[] request, String date) throws  IOException {
             System.out.println("Put detected");
 
             String response = " 200 OK\r\n";
@@ -180,12 +231,14 @@ class TCPServer
             out.writeBytes("\r\n");
         };
 
-        private void post(DataOutputStream out, String[] request, String date) throws  IOException {
+        private void post(BufferedReader in, DataOutputStream out, String[] request, String date) throws  IOException {
             System.out.println("Post detected");
             //Check if file already exists
             File htmlFile = new File("src" + request[1]);
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
                 out.writeBytes("404 Not found\r\n");
+                out.writeBytes("\r\n");
+                return;
             }
 
             out.writeBytes("Host: localhost\r\n");
@@ -193,15 +246,16 @@ class TCPServer
             out.writeBytes("Content-Length: " + "\r\n");
             out.writeBytes("Date: " + date + "\r\n");
             out.writeBytes("\r\n");
-
         };
 
-        private  void delete(DataOutputStream out, String[] request, String date) throws  IOException {
+        private  void delete(BufferedReader in, DataOutputStream out, String[] request, String date) throws  IOException {
             System.out.println("Delete detected");
             //Check if file already exists
             File htmlFile = new File("src" + request[1]);
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
                 out.writeBytes("404 Not found\r\n");
+                out.writeBytes("\r\n");
+                return;
             }
 
             //Fetch delete message

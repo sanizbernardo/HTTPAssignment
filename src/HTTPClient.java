@@ -96,7 +96,7 @@ class HTTPClient {
          */
 
         //Read from input stream
-        inputStream.read();
+        //inputStream.read();
 
         //Calling up the method to cast bytes of input stream to string
        fullText = byteToString("H",bytes,inputStream);
