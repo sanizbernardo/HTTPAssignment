@@ -77,8 +77,9 @@ class HTTPClient {
                      */
                     Scanner scanner = new Scanner(System.in);
                     String fullText;
-                    String htmlText;
+                    String htmlText = "";
                     String header;
+                    int contentLen=0;
 
                     /*
                      * Check if this is the first iteration or if the user has submitted a new request. If the user has submitted a new request,
@@ -86,9 +87,16 @@ class HTTPClient {
                      */
                     if (counter > 1) {
                         ArrayList<String> args=parseRequest(request);
-                        HTTPCommand = args.get(0);
-                        resource = args.get(1);
-                        request = "/";
+                        if (args.size() != 3) {
+                            outToServer.writeBytes("!\n\n");
+                            break;
+                        }
+                        else {
+
+                            HTTPCommand = args.get(0);
+                            resource = args.get(1);
+                            request = "/";
+                        }
                     }
 
                     // Creating byte array for incoming bytes
@@ -114,7 +122,7 @@ class HTTPClient {
                             PutOrPost(HTTPCommand, path, outToServer);
                             break;
                         case "DELETE":
-                            Delete(uri.toString(), outToServer, path);
+                            Delete(outToServer, resource);
                             break;
                         default:
                             break;
@@ -129,14 +137,21 @@ class HTTPClient {
                     header = splitUpHeaderRest(new byte[1],inputStream);
 
                     //Determine the content length from the header for reading our html part from the inputstream
-                    int contentLen = findContentLen(header);
+                    if (HTTPCommand.equals("GET") || (HTTPCommand.equals("HEAD")) || (HTTPCommand.equals("POST")))
+                        contentLen = findContentLen(header);
 
 
-                    // Looking for html part of input stream after header until inputstream is empty and convert bytes to string
-                    htmlText = byteToString(bytes, inputStream,contentLen);
                     // Add header and html part together
                     fullText = header;
-                    fullText += htmlText;
+
+                    // Looking for html part of input stream after header until inputstream is empty and convert bytes to string
+                    if (HTTPCommand.equals("DELETE")) {
+                        htmlText = searchForHtml(new byte[1],inputStream);
+                    }
+                    else if(!HTTPCommand.equals("HEAD")) {
+                        htmlText = byteToString(bytes, inputStream, contentLen);
+                        fullText += htmlText;
+                    }
 
 
                     /*
@@ -175,7 +190,8 @@ class HTTPClient {
                     // Use the found parameters of the title and body part of the html part and take these out of the string so we can
                     // replace the title and body part of the html template to create our own template.
                     String htmlString = FileUtils.readFileToString(htmlTemplateFile);
-                    String title = htmlText.substring(titleStart, titleEnd);;
+                    String title = htmlText.substring(titleStart, titleEnd);
+
                     String body = htmlText.substring(bodyStart, bodyEnd);
                     htmlString = htmlString.replace("$title", title);
                     htmlString = htmlString.replace("$body", body);
@@ -265,14 +281,17 @@ class HTTPClient {
 
         /**
          * This method deletes a given file from the server.
-         * @param host
          * @param outToServer
-         * @param file
+         * @param resource
          * @throws IOException
          */
-        void Delete(String host, DataOutputStream outToServer, String file) throws IOException {
-            outToServer.writeBytes("DELETE /"+file+" HTTP/1.1");
-            outToServer.writeBytes("Host: "+host+"\r\n");
+        void Delete(DataOutputStream outToServer, String resource) throws IOException {
+            Scanner scanner = new Scanner(System.in);
+            outToServer.writeBytes("DELETE "+resource+" HTTP/1.1\r\n");
+            System.out.print("Host: ");
+            String line = scanner.nextLine();
+            outToServer.writeBytes("Host: "+line+"\r\n");
+
             outToServer.writeBytes("\r\n");
             outToServer.flush();
         }
@@ -326,6 +345,22 @@ class HTTPClient {
                 }
             }
             return header;
+        }
+
+        public String searchForHtml(byte[] bytes, InputStream inputStream) throws IOException {
+            String byteString = "";
+            int chunk = inputStream.read(bytes);
+
+            while (!byteString.contains("</html>")) {
+                String substr = new String(bytes, StandardCharsets.UTF_8).substring(0, chunk);
+                byteString += substr;
+
+                chunk = inputStream.read(bytes);
+                if (chunk == 0)
+                    break;
+            }
+            return byteString;
+
         }
 
 
@@ -507,7 +542,7 @@ class HTTPClient {
             if (j < i)
                 args.add(request.substring(j,i));
             return args;
-        }
+        } // str[] strings = lines[0].split("\\s+") + is optioneel voor meerdere
 
         int findContentLen(String line) {
             String contentLength = "";
@@ -516,7 +551,7 @@ class HTTPClient {
             for (int i = 0; i< line.length()-15;i++) {
                 if (line.substring(i,i+15).equals("Content-Length:")) {
                     for (int j = i+15;j < line.length();j++) {
-                        if (Character.toString(line.charAt(j)).matches("-?\\d+") && cond)
+                        if (!Character.toString(line.charAt(j)).matches("-?\\d+") && cond)
                             break outerloop;
                         if (Character.toString(line.charAt(j)).matches("-?\\d+")) {
                             contentLength += line.charAt(j);

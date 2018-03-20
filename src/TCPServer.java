@@ -3,8 +3,6 @@ import org.apache.commons.io.FileUtils;
 import java.io.*;
 import java.net.*;
 import java.text.SimpleDateFormat;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -43,88 +41,122 @@ class TCPServer
         public void run()
         {
             try {
-                System.out.println("---- New Request---");
-
+                // Set up communication
                 BufferedReader inFromClient = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 DataOutputStream outToClient = new DataOutputStream(socket.getOutputStream());
+                AtomicBoolean running = new AtomicBoolean(true);
 
-                boolean requestcomplete = false;
-                List<String> input = new ArrayList<String>();
-                 while (!requestcomplete) {
-                     String inputline = inFromClient.readLine();
-                     if (inputline.equals("")) {
-                         requestcomplete = true;
-                     }
-                     input.add(inputline);
-                 }
+                // Notify client
+                outToClient.writeBytes("Connected\r\n");
+                outToClient.writeBytes("Quit command is '!, Enter, Enter'\r\n");
 
-                String[] lines = new String[input.size()];
-                input.toArray(lines);
-                 //Split request line into method, target file and http version
-                String[] requestline = lines[0].split("\\s+");
+                while (running.get()){
+                    boolean requestcomplete = false;
 
-                if (requestline[1].equals("/")) {
-                    System.out.println("Req line");
-                    requestline[1] = "/index.html";
+                    // Build request
+                    List<String> input = new ArrayList<String>();
+                    while (!requestcomplete) {
+                         String inputline = inFromClient.readLine();
+                        System.out.println("inputline: "+inputline);
+                        if (inputline.equals("")) {
+                             requestcomplete = true;
+                        }
+                        input.add(inputline);
+                    }
+
+                    String[] lines = new String[input.size()];
+                    input.toArray(lines);
+
+                    // Check for exit command
+                    for (String line : lines) {
+                        if (line.equals("!")) {
+                            running.set(false);
+                        }
+                    }
+                    if (!running.get()) {
+                        break;
+                    }
+
+                    // Split request line into method, target file and http version
+                    String[] requestline = lines[0].split("\\s+");
+                    System.out.println("ReqLine: "+lines[0]);
+
+                    // Check validity of request line
+                    if (requestline.length < 2 || requestline.length > 3) {
+                        outToClient.writeBytes("400 Bad Request\n");
+                        outToClient.writeBytes("\r\n");
+                        break;
+                    } else if (requestline.length == 2) {
+                        requestline = new String[] {requestline[0], requestline[1], "HTTP/1.0"};
+                    }
+
+                    if (requestline[1].equals("/")) {
+                        requestline[1] = "/index.html";
+                    }
+
+                    // HTTP versie controleren
+                    if (requestline[2].equals("HTTP/1.0")) {
+                        running.set(false);
+                    } else if (requestline[2].equals("HTTP/1.1")) {
+                        boolean hostgiven = false;
+                        for (String line : lines) {
+                            if (line.equals("Host: localhost")) {
+                                hostgiven = true;
+                            }
+                        }
+                        if (!hostgiven) {
+                            outToClient.writeBytes("400 Bad Request\n");
+                            outToClient.writeBytes("\r\n");
+                            continue;
+                        }
+                    } else {
+                        outToClient.writeBytes("400 Bad Request\n");
+                        outToClient.writeBytes("\r\n");
+                        continue;
+                    }
+
+                    // Get current date
+                    Calendar calendar = Calendar.getInstance();
+                    dateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
+                    String date = dateFormat.format(calendar.getTime());
+
+                    // Choose correct method
+                    switch (requestline[0]) {
+                        case "HEAD":
+                            head(outToClient, requestline, lines, date);
+                            break;
+                        case "GET":
+                            get(outToClient, requestline, lines, date);
+                            break;
+                        case "PUT":
+                            put(inFromClient, outToClient, requestline, date);
+                            break;
+                        case "POST":
+                            post(inFromClient, outToClient, requestline, date);
+                            break;
+                        case "DELETE":
+                            delete(inFromClient, outToClient, requestline, date);
+                            break;
+                        default:
+                            outToClient.writeBytes("400 Bad Request\n");
+                            outToClient.writeBytes("\r\n");
+                            break;
+                    }
                 }
-                 //Check if request is valid, give error message otherwise
-                if (!isValidRequest(requestline)) {
-                    outToClient.writeBytes("400 Bad Request\r\n");
-                }
-
-                //get current date
-                Calendar calendar = Calendar.getInstance();
-                dateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
-                String date = dateFormat.format(calendar.getTime());
-
-                //Choose correct method
-                switch (requestline[0]) {
-                    case "HEAD":
-                        head(outToClient, requestline, lines, date);
-                        break;
-                    case "GET":
-                        get(outToClient, requestline, lines, date);
-                        break;
-                    case "PUT":
-                        put(outToClient, requestline, date);
-                        break;
-                    case "POST":
-                        post(outToClient, requestline, date);
-                        break;
-                    case "DELETE":
-                        delete(outToClient, requestline, date);
-                        break;
-                    default:
-                        outToClient.writeBytes("400 Bad Request\r\n");
-                        break;
-                }
+                outToClient.writeBytes("Connection closed\r\n");
+                this.socket.close();
             } catch(IOException e) {
-
+                // Write "500 Server Error" somehow
             }
         }
 
-        private boolean isValidRequest(String[] request) throws  IOException{
-            boolean b = true;
-
-            //Request always contains method and file. Http version is optional, default to HTTP 1.0. Never more than 3
-            //arguments in request line
-            if (request.length < 2 || request.length > 3) {
-                b = false;
-            } else if (request.length ==  2) {
-                request[2] = "HTTP/1.0";
-            } else if (!request[2].equals("HTTP/1.1")) {
-                b = false;
-            }
-
-            return  b;
-        };
-
-        private String head(DataOutputStream out, String[] request, String[] lines, String date) throws  IOException {
-            System.out.println("Head detected: "+request[1] );
+        private void head(DataOutputStream out, String[] request, String[] lines, String date) throws  IOException {
             //Check if file already exists
             File htmlFile = new File("src" + request[1]);
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
                 out.writeBytes("404 Not found\r\n");
+                out.writeBytes("\r\n");
+                return;
             }
 
             Date moddate = new Date(htmlFile.lastModified());
@@ -137,9 +169,13 @@ class TCPServer
                             reqdate = dateFormat.parse(line.substring(19));
                         } catch(Exception e) {
                             out.writeBytes("400 Bad Request\r\n");
+                            out.writeBytes("\r\n");
+                            return;
                         }
                         if (moddate.compareTo(reqdate) > 0) {
                             out.writeBytes("304 Not Modified\r\n");
+                            out.writeBytes("\r\n");
+                            return;
                         }
                     }
                 }
@@ -153,29 +189,78 @@ class TCPServer
             out.writeBytes("Content-Length: " + htmlString.length() + "\r\n");
             out.writeBytes("Date: " + date + "\r\n");
             out.writeBytes("\r\n");
-            out.flush();
-
-            return htmlString;
         };
 
         private void get(DataOutputStream out, String[] request, String[] lines, String date) throws  IOException {
-            System.out.println("Get detected");
+             //Check if file already exists
+            File htmlFile = new File("src" + request[1]);
+            if(!htmlFile.exists() || htmlFile.isDirectory()) {
+                out.writeBytes("404 Not found\r\n");
+                out.writeBytes("\r\n");
+                return;
+            }
 
-            String htmlString = head(out, request, lines, date);
+            Date moddate = new Date(htmlFile.lastModified());
+
+            for (String line : lines) {
+                if (line.length() > 18){
+                    if (line.substring(0, 18).equals("If-Modified-Since:")) {
+                        Date reqdate = new Date();
+                        try {
+                            reqdate = dateFormat.parse(line.substring(19));
+                        } catch(Exception e) {
+                            out.writeBytes("400 Bad Request\r\n");
+                            out.writeBytes("\r\n");
+                            return;
+                        }
+                        if (moddate.compareTo(reqdate) > 0) {
+                            out.writeBytes("304 Not Modified\r\n");
+                            out.writeBytes("\r\n");
+                            return;
+                        }
+                    }
+                }
+            }
+
+            String htmlString = FileUtils.readFileToString(htmlFile);
+
+            //output headers
+            out.writeBytes(request[2] + " 200 OK\r\n");
+            out.writeBytes("Content-Type: " + "\r\n");
+            out.writeBytes("Content-Length: " + htmlString.length() + "\r\n");
+            out.writeBytes("Date: " + date + "\r\n");
+            out.writeBytes("\r\n");
 
             //output requested file
             out.writeBytes(htmlString);
+            out.writeBytes("\r\n");
         };
 
-        private void put(DataOutputStream out, String[] request, String date) throws  IOException {
-            System.out.println("Put detected");
-
+        private void put(BufferedReader in, DataOutputStream out, String[] request, String date) throws  IOException {
             String response = " 200 OK\r\n";
 
             //Check if file already exists
             File htmlFile = new File("src" + request[1]);
-            if(!htmlFile.exists() || htmlFile.isDirectory()) {
+            if (request[1].equals("index.html") || request[1].equals("template.html") || request[1].equals("deletemessage.html")) {
+                out.writeBytes("403 Forbidden\r\n");
+                out.writeBytes("\r\n");
+                return;
+            }else if(!htmlFile.exists() || htmlFile.isDirectory()) {
                 response = " 201 Created\r\n";
+            }
+
+            out.writeBytes(request[2] + " 100 Continue\r\n");
+
+            boolean bodycomplete = false;
+
+            // Build body
+            String body = "";
+            while (!bodycomplete) {
+                String inputline = in.readLine();
+                if (inputline.equals("")) {
+                    bodycomplete = true;
+                }
+                body += inputline;
             }
 
             out.writeBytes(request[2] + response);
@@ -184,39 +269,66 @@ class TCPServer
             out.writeBytes("\r\n");
         };
 
-        private void post(DataOutputStream out, String[] request, String date) throws  IOException {
-            System.out.println("Post detected");
+        private void post(BufferedReader in, DataOutputStream out, String[] request, String date) throws  IOException {
             //Check if file already exists
             File htmlFile = new File("src" + request[1]);
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
                 out.writeBytes("404 Not found\r\n");
+                out.writeBytes("\r\n");
+                return;
+            }
+
+            out.writeBytes(request[2] + " 100 Continue\r\n");
+
+            boolean bodycomplete = false;
+
+            // Build body
+            String body = "";
+            while (!bodycomplete) {
+                String inputline = in.readLine();
+                if (inputline.equals("")) {
+                    bodycomplete = true;
+                }
+                body += inputline;
             }
 
             out.writeBytes("Host: localhost\r\n");
             out.writeBytes("Content-Type: \r\n");
-            out.writeBytes("Content-Length: " + "\r\n");
+            out.writeBytes("Content-Length: " + body.length() + "\r\n");
             out.writeBytes("Date: " + date + "\r\n");
             out.writeBytes("\r\n");
-
         };
 
-        private  void delete(DataOutputStream out, String[] request, String date) throws  IOException {
-            System.out.println("Delete detected");
+        private  void delete(BufferedReader in, DataOutputStream out, String[] request, String date) throws  IOException {
             //Check if file already exists
+            System.out.println("FILEHTMLFILE: "+"src" + request[1]);
             File htmlFile = new File("src" + request[1]);
-            if(!htmlFile.exists() || htmlFile.isDirectory()) {
+            System.out.println("HTML file: "+htmlFile);
+            if (request[1].equals("/index.html") || request[1].equals("/template.html") || request[1].equals("/deletemessage.html")) {
+                out.writeBytes("403 Forbidden\r\n");
+                out.writeBytes("\r\n");
+                return;
+            } else if (!htmlFile.exists() || htmlFile.isDirectory()) {
                 out.writeBytes("404 Not found\r\n");
+                out.writeBytes("\r\n");
+                return;
             }
 
-            //Fetch delete message
-            File message = new File("src/deletemessage.html");
-            String confirmdelete = FileUtils.readFileToString(message);
+            if (htmlFile.delete()) {
+                //Fetch delete message
+                File message = new File("src/deletemessage.html");
+                String confirmdelete = FileUtils.readFileToString(message);
 
-            out.writeBytes("Date: " + date + "\r\n");
-            out.writeBytes("\r\n");
+                out.writeBytes("Date: " + date + "\r\n");
+                out.writeBytes("\r\n");
 
-            //output delete message
-            out.writeBytes(confirmdelete);
+                //output delete message
+                out.writeBytes(confirmdelete);
+                out.writeBytes("\r\n");
+            } else {
+                out.writeBytes(request[2] + "403 Forbidden\r\n");
+                out.writeBytes("\r\n");
+            }
         };
 
     }
