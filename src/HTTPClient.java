@@ -69,9 +69,8 @@ class HTTPClient {
             // Creating new html template
             File htmlTemplateFile = new File("src/template.html");
             String request = "";
-            String resource = "/";
+            String resource = "/get";
             while (true) {
-                System.out.println("Run: "+request);
                 try {
                     /*
                      * Variables
@@ -127,9 +126,8 @@ class HTTPClient {
                      */
 
                     //Calling up the method to cast bytes of input stream to string
-                    System.out.println("Voor byteToString");
                     fullText = byteToString(bytes, inputStream);
-                    System.out.println("Na byteToString");
+
                     //Sometimes the inputStream.available() does not see all the data immediately, so we check if we have all the
                     //data for our html file with ends in </HTML> or </html>, if the String does not contain one of these two elements
                     // then we keep converting bytes of inputStream to String and add the result onto the existing string until it contains one
@@ -219,13 +217,10 @@ class HTTPClient {
          */
         void Get(String host,DataOutputStream outToServer,String resource) throws IOException
         {
-            System.out.println("GET/ ");
             outToServer.writeBytes("GET "+resource+" HTTP/1.1\r\n");
             outToServer.writeBytes("Host: "+host+"\r\n");
             outToServer.writeBytes("\r\n");
             outToServer.flush();
-            System.out.println(outToServer.size());
-            System.out.println("GET •");
         }
 
         /**
