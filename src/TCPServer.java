@@ -12,7 +12,7 @@ class TCPServer
 {
     public static void main(String argv[]) throws Exception
     {
-        ServerSocket welcomeSocket = new ServerSocket(6938);
+        ServerSocket welcomeSocket = new ServerSocket(6000);
         int i = 0;
 
         // always true -> server remains active
@@ -43,6 +43,7 @@ class TCPServer
         public void run()
         {
             try {
+                System.out.println("---- New Request---");
 
                 BufferedReader inFromClient = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 DataOutputStream outToClient = new DataOutputStream(socket.getOutputStream());
@@ -152,6 +153,7 @@ class TCPServer
             out.writeBytes("Content-Length: " + htmlString.length() + "\r\n");
             out.writeBytes("Date: " + date + "\r\n");
             out.writeBytes("\r\n");
+            out.flush();
 
             return htmlString;
         };

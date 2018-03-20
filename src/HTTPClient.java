@@ -8,9 +8,7 @@ import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Scanner;
-import java.util.regex.Pattern;
 
 class HTTPClient {
 
@@ -73,6 +71,7 @@ class HTTPClient {
             String request = "";
             String resource = "/";
             while (true) {
+                System.out.println("Run: "+request);
                 try {
                     /*
                      * Variables
@@ -91,6 +90,7 @@ class HTTPClient {
                         resource = args.get(1);
                         request = "";
                     }
+                    System.out.println("HTTP Command: "+HTTPCommand+" Resource: "+resource);
 
                     // Creating byte array for incoming bytes
                     byte[] bytes = new byte[100];
@@ -127,8 +127,9 @@ class HTTPClient {
                      */
 
                     //Calling up the method to cast bytes of input stream to string
+                    System.out.println("Voor byteToString");
                     fullText = byteToString(bytes, inputStream);
-
+                    System.out.println("Na byteToString");
                     //Sometimes the inputStream.available() does not see all the data immediately, so we check if we have all the
                     //data for our html file with ends in </HTML> or </html>, if the String does not contain one of these two elements
                     // then we keep converting bytes of inputStream to String and add the result onto the existing string until it contains one
@@ -165,7 +166,6 @@ class HTTPClient {
                     // to convert the bytes of the images in inputStream into files.
                     if (getImages(htmlText).size() != 0) {
                         for (String img : getImages(htmlText)) {
-                            System.out.println("Image: "+img);
                             if (img.length() != 0)
                                 getImage(img, path, inputStream, outToServer);
                         }
@@ -185,7 +185,7 @@ class HTTPClient {
                     String body = htmlText.substring(bodyStart, bodyEnd);
                     htmlString = htmlString.replace("$title", title);
                     htmlString = htmlString.replace("$body", body);
-                    File newHtmlFile = new File("src/new"+counter+".html");
+                    File newHtmlFile = new File("src/new.html");
                     FileUtils.writeStringToFile(newHtmlFile, htmlString);
 
                     System.out.println("Type your next request or type \"STOP\" if you want to close the client.");
@@ -219,10 +219,13 @@ class HTTPClient {
          */
         void Get(String host,DataOutputStream outToServer,String resource) throws IOException
         {
+            System.out.println("GET/ ");
             outToServer.writeBytes("GET "+resource+" HTTP/1.1\r\n");
             outToServer.writeBytes("Host: "+host+"\r\n");
             outToServer.writeBytes("\r\n");
-
+            outToServer.flush();
+            System.out.println(outToServer.size());
+            System.out.println("GET •");
         }
 
         /**
@@ -237,6 +240,7 @@ class HTTPClient {
             outToServer.writeBytes("HEAD "+resource+" HTTP/1.1\r\n");
             outToServer.writeBytes("Host: "+host+"\r\n");
             outToServer.writeBytes("\r\n");
+            outToServer.flush();
         }
 
         /**
@@ -262,6 +266,7 @@ class HTTPClient {
             outToServer.writeBytes("\r\n");
             System.out.println("Please input the content: ");
             outToServer.writeBytes(scanner.nextLine()+"\r\n");
+            outToServer.flush();
         }
 
 
@@ -276,14 +281,17 @@ class HTTPClient {
             outToServer.writeBytes("DELETE /"+file+" HTTP/1.1");
             outToServer.writeBytes("Host: "+host+"\r\n");
             outToServer.writeBytes("\r\n");
+            outToServer.flush();
         }
 
         /**
-         * This method contains a while loop that checks whether the available data in the input stream is larger than
-         * 100 bytes, if this is the case then the method will convert bytes of the input stream in blocks of 100 bytes
-         * to string. If the available data in the input stream is smaller than 100 bytes, it will take the
-         * remaining bytes left in the input stream and turn those remaining bytes into a string and add it onto the
-         * longer string that was created during the while loop.
+         * This method reads the bytes from the input stream and the amount read is saved in
+         * a variable 'chunk'. We check if there is more data left in the input stream and if 'chunk'
+         * is larger than 0 (thus there has been data read from the input stream). If this is the case,
+         * we convert the bytes read to string and add it to the final string. We read again and check again
+         * for the same conditions. If these conditions are not met, we jump out of the loop and check
+         * if chunk is larger than 0, and if that is the case, we write the remaining bytes to string
+         * and add it to the final string.
          * @param bytes
          * @param inputStream
          * @return
@@ -292,22 +300,16 @@ class HTTPClient {
         String byteToString(byte[] bytes,InputStream inputStream) throws IOException
         {
             String byteString = "";
-            byte[] restBytes;
-            //Continue doing so until the amount of data in input stream is less than 100 bytes
-            while (inputStream.available() > 100) {
-                inputStream.read(bytes, 0, 100);
-                byteString += new String(bytes, StandardCharsets.UTF_8);
-                bytes = new byte[100];
+            int chunk;
 
-
+            chunk = inputStream.read(bytes);
+            while (chunk > 0 && inputStream.available() > 0) {
+                byteString+= (new String(bytes,StandardCharsets.UTF_8)).substring(0,chunk);
+                chunk = inputStream.read(bytes);
             }
+            if (chunk > 0)
+                byteString+= (new String(bytes,StandardCharsets.UTF_8)).substring(0,chunk);
 
-            // The remaining bytes in input stream smaller than 100 is put into 'rest'
-            // These remaining bytes will be cast to string and added onto the whole string that was created in the while loop above.
-            int rest = inputStream.available();
-            restBytes = new byte[rest];
-            inputStream.read(restBytes, 0, rest);
-            byteString += new String(restBytes, StandardCharsets.UTF_8);
             return byteString;
 
         }
@@ -479,6 +481,13 @@ class HTTPClient {
             }
         }
 
+        /**
+         * This method checks for the begin and end index of a certain part of the given html file.
+         * @param htmlText
+         * @param searchBegin
+         * @param searchEnd
+         * @return
+         */
         int[] findBeginEndIndex(String htmlText, String searchBegin, String searchEnd) {
             String searchUpperBegin = searchBegin.toUpperCase(), searchUpperEnd = searchEnd.toUpperCase();
             int start = 0, end = 0;
@@ -499,8 +508,14 @@ class HTTPClient {
             return result;
         }
 
+        /**
+         * This method takes in a request as a string that contains 3 seperate words. The request is
+         * always of the form : "HTTPCommand RESOURCE HTTP/1.1". It splices the whole string up into
+         * these 3 parts and saves each string separately into an arraylist.
+         * @param request
+         * @return
+         */
         ArrayList<String> parseRequest(String request) {
-            System.out.println("Parserequest: "+request);
             ArrayList<String> args = new ArrayList<>();
             int j = 0;
             int i = 0;
@@ -513,13 +528,8 @@ class HTTPClient {
             }
             if (j < i)
                 args.add(request.substring(j,i));
-            System.out.println("Args: "+args);
             return args;
         }
-
-
-
-
 
 
     }
