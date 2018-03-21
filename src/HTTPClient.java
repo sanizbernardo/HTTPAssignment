@@ -174,7 +174,7 @@ class HTTPClient {
                     if (getImages(htmlText).size() != 0) {
                         for (String img : getImages(htmlText)) {
                             if (img.length() != 0)
-                                getImage("",img, path, inputStream, outToServer);
+                                getImage(img, path, inputStream, outToServer);
                         }
                     }
 
@@ -405,18 +405,15 @@ class HTTPClient {
          * This method sends out a GET command for the given image to the given host,
          * finds the given image inside the input stream and takes the right amount of bytes and writes
          * these bytes into a file that will be stored inside the source folder.
-         * @param path
          * @param image
          * @param host
          * @param inputStream
          * @param outToServer
          * @throws IOException
          */
-        void getImage(String path,String image, String host, InputStream inputStream,DataOutputStream outToServer) throws IOException {
-            if (image.charAt(0) == '/') {
-                //TODO nachecken
-                image = image.substring(1);
-            }
+        void getImage(String image, String host, InputStream inputStream,DataOutputStream outToServer) throws IOException {
+
+            System.out.println("Test");
             // Initialize some variables that will be needed in this method
             byte [] bytes = new byte [1];
             // Send out the GET request to the server
@@ -426,10 +423,20 @@ class HTTPClient {
             String line = splitUpHeaderRest(bytes,inputStream);
             // This part searches for the content length in the header.
             int contentLen = findContentLen(line);
+
             // If the image from the server is stored in another folder than the source, a new directory will be created inside source.
-            FileOutputStream fos = new FileOutputStream("src/"+path+image);
+            System.out.println("hier");
+            if (detectPathImg(image) != null) {
+                new File(detectPathImg("src/"+image)).mkdirs();
+            }
+            System.out.println("lol");
+            System.out.println("src/"+image);
+            // If the image from the server is stored in another folder than the source, a new directory will be created inside source.
+            FileOutputStream fos = new FileOutputStream("src/"+image);
+            System.out.println("hahha");
             byte [] htmlByte = new byte[4096];
             int chunk =inputStream.read(htmlByte);
+            System.out.println("test");
 
             // This loop will keep looping as long as there is data in the input stream and the amount of iterations won't exceed the
             // content length that was found in the header.
