@@ -143,7 +143,7 @@ class HTTPClient {
                         htmlText = searchForHtml(new byte[100],inputStream);
                     }
                     else if (HTTPCommand.equals("PUT") || HTTPCommand.equals("POST")) {}
-                    else if(!HTTPCommand.equals("HEAD") && !HTTPCommand.equals("DELETE") && !isImage(getFileExtension(resource))) {
+                    else if(!HTTPCommand.equals("HEAD") && !HTTPCommand.equals("DELETE") ) {
                         htmlText = byteToString(bytes, inputStream, contentLen);
                     }
 
@@ -182,19 +182,15 @@ class HTTPClient {
 
                     // Use the found parameters of the title and body part of the html part and take these out of the string so we can
                     // replace the title and body part of the html template to create our own template.
-                    if (! isImage(getFileExtension(resource))) {
-                        String htmlString = FileUtils.readFileToString(htmlTemplateFile);
-                        String title = htmlText.substring(titleStart, titleEnd);
-                        String body = htmlText.substring(bodyStart, bodyEnd);
-                        htmlString = htmlString.replace("$title", title);
-                        htmlString = htmlString.replace("$body", body);
-                        File newHtmlFile = new File("src/new.html");
-                        FileUtils.writeStringToFile(newHtmlFile, htmlString);
-                    }
-                    else {
-                        System.out.println("Hier??");
-                        getImage("client/",resource,path,inputStream,outToServer);
-                    }
+
+                    String htmlString = FileUtils.readFileToString(htmlTemplateFile);
+                    String title = htmlText.substring(titleStart, titleEnd);
+                    String body = htmlText.substring(bodyStart, bodyEnd);
+                    htmlString = htmlString.replace("$title", title);
+                    htmlString = htmlString.replace("$body", body);
+                    File newHtmlFile = new File("src/new.html");
+                    FileUtils.writeStringToFile(newHtmlFile, htmlString);
+
 
                     //Check if the user wants to do another request
                     System.out.println("Type your next request or type \"STOP\" if you want to close the client.");
@@ -575,22 +571,6 @@ class HTTPClient {
                 return -1;
         }
 
-        public static String getFileExtension(String fullName) {
-            String fileName = new File(fullName).getName();
-            int dotIndex = fileName.lastIndexOf('.');
-            return (dotIndex == -1) ? "" : fileName.substring(dotIndex + 1);
-        }
-
-        public static boolean isImage(String tag) {
-            String [] imgTags = {"png","jpeg","jpg","img","jfif","exif","tiff","bmp","ppm"
-                    ,"pgm","bat"};
-            for (String str: imgTags) {
-                if (str.equals(tag))
-                    return true;
-            }
-            return false;
-
-        }
 
 
     }
