@@ -1,5 +1,10 @@
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.FilenameUtils;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
+import java.awt.image.WritableRaster;
 import java.io.*;
 import java.net.*;
 import java.text.SimpleDateFormat;
@@ -57,7 +62,6 @@ class TCPServer
                     List<String> input = new ArrayList<String>();
                     while (!requestcomplete) {
                          String inputline = inFromClient.readLine();
-                        System.out.println("inputline: "+inputline);
                         if (inputline.equals("")) {
                              requestcomplete = true;
                         }
@@ -76,10 +80,13 @@ class TCPServer
                     if (!running.get()) {
                         break;
                     }
-
+                    String contentLen = "";
+                    for (String str:lines) {
+                        if (str.contains("Content-length"))
+                            contentLen = str;
+                    }
                     // Split request line into method, target file and http version
                     String[] requestline = lines[0].split("\\s+");
-                    System.out.println("ReqLine: "+lines[0]);
 
                     // Check validity of request line
                     if (requestline.length < 2 || requestline.length > 3) {
@@ -103,6 +110,9 @@ class TCPServer
                             if (line.equals("Host: localhost")) {
                                 hostgiven = true;
                             }
+                            if (line.equals("Connection: close")) {
+                                running.set(false);
+                            }
                         }
                         if (!hostgiven) {
                             outToClient.writeBytes("400 Bad Request\n");
@@ -119,7 +129,6 @@ class TCPServer
                     Calendar calendar = Calendar.getInstance();
                     dateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
                     String date = dateFormat.format(calendar.getTime());
-
                     // Choose correct method
                     switch (requestline[0]) {
                         case "HEAD":
@@ -129,10 +138,10 @@ class TCPServer
                             get(outToClient, requestline, lines, date);
                             break;
                         case "PUT":
-                            put(inFromClient, outToClient, requestline, date);
+                            put(inFromClient, outToClient, requestline, date,contentLen);
                             break;
                         case "POST":
-                            post(inFromClient, outToClient, requestline, date);
+                            post(inFromClient, outToClient, requestline, date,contentLen);
                             break;
                         case "DELETE":
                             delete(inFromClient, outToClient, requestline, date);
@@ -154,7 +163,7 @@ class TCPServer
             //Check if file already exists
             File htmlFile = new File("src" + request[1]);
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
-                out.writeBytes("404 Not found\r\n");
+                out.writeBytes(request[2] + " 404 Not found\r\n");
                 out.writeBytes("\r\n");
                 return;
             }
@@ -168,12 +177,12 @@ class TCPServer
                         try {
                             reqdate = dateFormat.parse(line.substring(19));
                         } catch(Exception e) {
-                            out.writeBytes("400 Bad Request\r\n");
+                            out.writeBytes(request[2] + " 400 Bad Request\r\n");
                             out.writeBytes("\r\n");
                             return;
                         }
                         if (moddate.compareTo(reqdate) > 0) {
-                            out.writeBytes("304 Not Modified\r\n");
+                            out.writeBytes(request[2] + " 304 Not Modified\r\n");
                             out.writeBytes("\r\n");
                             return;
                         }
@@ -185,7 +194,7 @@ class TCPServer
 
             //output headers
             out.writeBytes(request[2] + " 200 OK\r\n");
-            out.writeBytes("Content-Type: " + "\r\n");
+            out.writeBytes("Content-Type: " + FilenameUtils.getExtension("src" + request[1]) + "\r\n");
             out.writeBytes("Content-Length: " + htmlString.length() + "\r\n");
             out.writeBytes("Date: " + date + "\r\n");
             out.writeBytes("\r\n");
@@ -193,93 +202,113 @@ class TCPServer
 
         private void get(DataOutputStream out, String[] request, String[] lines, String date) throws  IOException {
              //Check if file already exists
+            byte [] byteOutput;
             File htmlFile = new File("src" + request[1]);
+            System.out.println();
+            String fileExt = getFileExtension(htmlFile.getCanonicalPath());
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
-                out.writeBytes("404 Not found\r\n");
+                out.writeBytes(request[2] + " 404 Not found\r\n");
                 out.writeBytes("\r\n");
                 return;
             }
 
             Date moddate = new Date(htmlFile.lastModified());
 
-            for (String line : lines) {
-                if (line.length() > 18){
-                    if (line.substring(0, 18).equals("If-Modified-Since:")) {
-                        Date reqdate = new Date();
-                        try {
-                            reqdate = dateFormat.parse(line.substring(19));
-                        } catch(Exception e) {
-                            out.writeBytes("400 Bad Request\r\n");
-                            out.writeBytes("\r\n");
-                            return;
-                        }
-                        if (moddate.compareTo(reqdate) > 0) {
-                            out.writeBytes("304 Not Modified\r\n");
-                            out.writeBytes("\r\n");
-                            return;
+            if (fileExt.equals("html")) {
+                for (String line : lines) {
+                    if (line.length() > 18) {
+                        if (line.substring(0, 18).equals("If-Modified-Since:")) {
+                            Date reqdate = new Date();
+                            try {
+                                reqdate = dateFormat.parse(line.substring(19));
+                            } catch (Exception e) {
+                                out.writeBytes(request[2] + " 400 Bad Request\r\n");
+                                out.writeBytes("\r\n");
+                                return;
+                            }
+                            if (moddate.compareTo(reqdate) > 0) {
+                                out.writeBytes(request[2] + " 304 Not Modified\r\n");
+                                out.writeBytes("\r\n");
+                                return;
+                            }
                         }
                     }
                 }
+                String htmlString = FileUtils.readFileToString(htmlFile);
+                byteOutput = htmlString.getBytes();
+            }
+            else {
+                BufferedImage bufferedImage = ImageIO.read(htmlFile);
+
+                // get DataBufferBytes from Raster
+                WritableRaster raster = bufferedImage .getRaster();
+                DataBufferByte data   = (DataBufferByte) raster.getDataBuffer();
+
+                byteOutput = data.getData();
             }
 
-            String htmlString = FileUtils.readFileToString(htmlFile);
 
             //output headers
             out.writeBytes(request[2] + " 200 OK\r\n");
-            out.writeBytes("Content-Type: " + "\r\n");
-            out.writeBytes("Content-Length: " + htmlString.length() + "\r\n");
+            out.writeBytes("Content-Type: " + FilenameUtils.getExtension("src" + request[1]) + "\r\n");
+            out.writeBytes("Content-Length: " + byteOutput.length + "\r\n");
             out.writeBytes("Date: " + date + "\r\n");
             out.writeBytes("\r\n");
 
             //output requested file
-            out.writeBytes(htmlString);
+            out.write(byteOutput);
             out.writeBytes("\r\n");
         };
 
-        private void put(BufferedReader in, DataOutputStream out, String[] request, String date) throws  IOException {
+        private void put(BufferedReader in, DataOutputStream out, String[] request, String date, String contentLen) throws  IOException {
             String response = " 200 OK\r\n";
-
+            int contentLength = extractNumber(contentLen);
             //Check if file already exists
             File htmlFile = new File("src" + request[1]);
             if (request[1].equals("index.html") || request[1].equals("template.html") || request[1].equals("deletemessage.html")) {
-                out.writeBytes("403 Forbidden\r\n");
+                out.writeBytes(request[2] + " 403 Forbidden\r\n");
                 out.writeBytes("\r\n");
                 return;
             }else if(!htmlFile.exists() || htmlFile.isDirectory()) {
                 response = " 201 Created\r\n";
             }
-
             out.writeBytes(request[2] + " 100 Continue\r\n");
-
-            boolean bodycomplete = false;
-
-            // Build body
-            String body = "";
-            while (!bodycomplete) {
-                String inputline = in.readLine();
-                if (inputline.equals("")) {
-                    bodycomplete = true;
-                }
-                body += inputline;
-            }
-
             out.writeBytes(request[2] + response);
             out.writeBytes("Content Location: src" + request[1] + "\r\n");
             out.writeBytes("Date: " + date + "\r\n");
             out.writeBytes("\r\n");
+            boolean bodycomplete = false;
+
+            // Build body
+            String body = "";
+            while (!bodycomplete) {
+                String inputline = in.readLine();
+                if (inputline.equals("")) {
+                    bodycomplete = true;
+                }
+                body += inputline;
+                if (body.length() == contentLength)
+                    break;
+            }
+            String htmlString = FileUtils.readFileToString(new File("src/template.html"));
+            htmlString = htmlString.replace("$body", body);
+            FileUtils.writeStringToFile(htmlFile, htmlString);
+
+
         };
 
-        private void post(BufferedReader in, DataOutputStream out, String[] request, String date) throws  IOException {
+        private void post(BufferedReader in, DataOutputStream out, String[] request, String date, String contentLen) throws  IOException {
             //Check if file already exists
-            File htmlFile = new File("src" + request[1]);
-            if(!htmlFile.exists() || htmlFile.isDirectory()) {
-                out.writeBytes("404 Not found\r\n");
+            File file = new File("src" + request[1]);
+            if(!file.exists() || file.isDirectory()) {
+                out.writeBytes(request[2] + " 404 Not found\r\n");
                 out.writeBytes("\r\n");
                 return;
             }
 
             out.writeBytes(request[2] + " 100 Continue\r\n");
-
+            out.writeBytes("Host: localhost\r\n");
+            out.writeBytes("Content-Type:" + FilenameUtils.getExtension("src" + request[1]) + "\r\n");
             boolean bodycomplete = false;
 
             // Build body
@@ -292,33 +321,33 @@ class TCPServer
                 body += inputline;
             }
 
-            out.writeBytes("Host: localhost\r\n");
-            out.writeBytes("Content-Type: \r\n");
             out.writeBytes("Content-Length: " + body.length() + "\r\n");
             out.writeBytes("Date: " + date + "\r\n");
             out.writeBytes("\r\n");
+
+
         };
 
         private  void delete(BufferedReader in, DataOutputStream out, String[] request, String date) throws  IOException {
             //Check if file already exists
-            System.out.println("FILEHTMLFILE: "+"src" + request[1]);
-            File htmlFile = new File("src" + request[1]);
-            System.out.println("HTML file: "+htmlFile);
+            File file = new File("src" + request[1]);
+
             if (request[1].equals("/index.html") || request[1].equals("/template.html") || request[1].equals("/deletemessage.html")) {
-                out.writeBytes("403 Forbidden\r\n");
+                out.writeBytes(request[2] + " 403 Forbidden\r\n");
                 out.writeBytes("\r\n");
                 return;
-            } else if (!htmlFile.exists() || htmlFile.isDirectory()) {
-                out.writeBytes("404 Not found\r\n");
+            } else if (!file.exists() || file.isDirectory()) {
+                out.writeBytes(request[2] + " 404 Not found\r\n");
                 out.writeBytes("\r\n");
                 return;
             }
 
-            if (htmlFile.delete()) {
+            if (file.delete()) {
                 //Fetch delete message
                 File message = new File("src/deletemessage.html");
                 String confirmdelete = FileUtils.readFileToString(message);
 
+                out.writeBytes(request[2] + " 200 OK\r\n");
                 out.writeBytes("Date: " + date + "\r\n");
                 out.writeBytes("\r\n");
 
@@ -330,6 +359,30 @@ class TCPServer
                 out.writeBytes("\r\n");
             }
         };
+
+
+        public static int extractNumber(final String str) {
+
+            StringBuilder sb = new StringBuilder();
+            boolean found = false;
+            for(char c : str.toCharArray()){
+                if(Character.isDigit(c)){
+                    sb.append(c);
+                    found = true;
+                } else if(found){
+                    break;
+                }
+            }
+
+            return Integer.parseInt(sb.toString());
+        }
+
+        public static String getFileExtension(String fullName) {
+            String fileName = new File(fullName).getName();
+            int dotIndex = fileName.lastIndexOf('.');
+            return (dotIndex == -1) ? "" : fileName.substring(dotIndex + 1);
+        }
+
 
     }
 }
