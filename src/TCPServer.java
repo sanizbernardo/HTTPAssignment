@@ -15,7 +15,7 @@ class TCPServer
 {
     public static void main(String argv[]) throws Exception
     {
-        ServerSocket welcomeSocket = new ServerSocket(6000);
+        ServerSocket welcomeSocket = new ServerSocket(1500);
         int i = 0;
 
         // always true -> server remains active
@@ -80,6 +80,8 @@ class TCPServer
                     if (!running.get()) {
                         break;
                     }
+
+                    // Checks if incoming request contains info about content length, if so, save the content length
                     String contentLen = "";
                     for (String str:lines) {
                         if (str.contains("Content-length"))
@@ -155,12 +157,27 @@ class TCPServer
                 outToClient.writeBytes("Connection closed\r\n");
                 this.socket.close();
             } catch(IOException e) {
-                // Write "500 Server Error" somehow
+
             }
         }
 
+
+        /**
+         * This method will be called when the client performs a HEAD request.
+         * The method will first check if the request is valid, else will write out
+         * error messages corresponding to the error made.
+         * Then the method will write out the header that would be expected from the response that was made by
+         * the client.
+         * @param out
+         * @param request
+         * @param lines
+         * @param date
+         * @throws IOException
+         */
         private void head(DataOutputStream out, String[] request, String[] lines, String date) throws  IOException {
             //Check if file already exists
+            System.out.println("HEAD Request happened");
+            System.out.println("Waiting...");
             File htmlFile = new File("src" + request[1]);
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
                 out.writeBytes(request[2] + " 404 Not found\r\n");
@@ -198,14 +215,28 @@ class TCPServer
             out.writeBytes("Content-Length: " + htmlString.length() + "\r\n");
             out.writeBytes("Date: " + date + "\r\n");
             out.writeBytes("\r\n");
+            System.out.println("Successful");
         };
 
+        /**
+         * This method will be called when the client performs a GET request.
+         * The method will first check if the request is valid, else will write out
+         * error messages corresponding to the error made.
+         * Then the method will write out the header that would be expected from the response that was made by
+         * the client and will also write out the body of the page that was requested.
+         * @param out
+         * @param request
+         * @param lines
+         * @param date
+         * @throws IOException
+         */
         private void get(DataOutputStream out, String[] request, String[] lines, String date) throws  IOException {
              //Check if file already exists
+            System.out.println("GET Request happened");
+            System.out.println("Waiting...");
             byte [] byteOutput;
             File htmlFile = new File("src" + request[1]);
             System.out.println();
-            String fileExt = getFileExtension(htmlFile.getCanonicalPath());
             if(!htmlFile.exists() || htmlFile.isDirectory()) {
                 out.writeBytes(request[2] + " 404 Not found\r\n");
                 out.writeBytes("\r\n");
@@ -214,38 +245,28 @@ class TCPServer
 
             Date moddate = new Date(htmlFile.lastModified());
 
-            if (fileExt.equals("html")) {
-                for (String line : lines) {
-                    if (line.length() > 18) {
-                        if (line.substring(0, 18).equals("If-Modified-Since:")) {
-                            Date reqdate = new Date();
-                            try {
-                                reqdate = dateFormat.parse(line.substring(19));
-                            } catch (Exception e) {
-                                out.writeBytes(request[2] + " 400 Bad Request\r\n");
-                                out.writeBytes("\r\n");
-                                return;
-                            }
-                            if (moddate.compareTo(reqdate) > 0) {
-                                out.writeBytes(request[2] + " 304 Not Modified\r\n");
-                                out.writeBytes("\r\n");
-                                return;
-                            }
+            for (String line : lines) {
+                if (line.length() > 18) {
+                    if (line.substring(0, 18).equals("If-Modified-Since:")) {
+                        Date reqdate = new Date();
+                        try {
+                            reqdate = dateFormat.parse(line.substring(19));
+                        } catch (Exception e) {
+                            out.writeBytes(request[2] + " 400 Bad Request\r\n");
+                            out.writeBytes("\r\n");
+                            return;
+                        }
+                        if (moddate.compareTo(reqdate) > 0) {
+                            out.writeBytes(request[2] + " 304 Not Modified\r\n");
+                            out.writeBytes("\r\n");
+                            return;
                         }
                     }
                 }
-                String htmlString = FileUtils.readFileToString(htmlFile);
-                byteOutput = htmlString.getBytes();
             }
-            else {
-                BufferedImage bufferedImage = ImageIO.read(htmlFile);
+            String htmlString = FileUtils.readFileToString(htmlFile);
+            byteOutput = htmlString.getBytes();
 
-                // get DataBufferBytes from Raster
-                WritableRaster raster = bufferedImage .getRaster();
-                DataBufferByte data   = (DataBufferByte) raster.getDataBuffer();
-
-                byteOutput = data.getData();
-            }
 
 
             //output headers
@@ -258,9 +279,26 @@ class TCPServer
             //output requested file
             out.write(byteOutput);
             out.writeBytes("\r\n");
+            System.out.println("Successful");
         };
 
+        /**
+         * This method will be called when the client performs a PUT response.
+         * The method will first check if the request is valid, else will write out
+         * error messages corresponding to the error made.
+         * Then it will read the data the client has provided for the html file it wants to write and will
+         * create a html file with the name provided by the user and fill it with data
+         * provided by the client.
+         * @param in
+         * @param out
+         * @param request
+         * @param date
+         * @param contentLen
+         * @throws IOException
+         */
         private void put(BufferedReader in, DataOutputStream out, String[] request, String date, String contentLen) throws  IOException {
+            System.out.println("PUT Request happened");
+            System.out.println("Waiting...");
             String response = " 200 OK\r\n";
             int contentLength = extractNumber(contentLen);
             //Check if file already exists
@@ -293,12 +331,28 @@ class TCPServer
             String htmlString = FileUtils.readFileToString(new File("src/template.html"));
             htmlString = htmlString.replace("$body", body);
             FileUtils.writeStringToFile(htmlFile, htmlString);
-
+            System.out.println("Successful");
 
         };
 
+
+        /**
+         * This method will be called if the client performs a POST request.
+         * The method will first check if the request is valid, else will write out
+         * error messages corresponding to the error made.
+         * Then it will read the data the client has provided for the html file it wants to write to and will
+         * write this data to the html file named with the info given from the user.
+         * @param in
+         * @param out
+         * @param request
+         * @param date
+         * @param contentLen
+         * @throws IOException
+         */
         private void post(BufferedReader in, DataOutputStream out, String[] request, String date, String contentLen) throws  IOException {
             //Check if file already exists
+            System.out.println("POST Request happened");
+            System.out.println("Waiting...");
             File file = new File("src" + request[1]);
             if(!file.exists() || file.isDirectory()) {
                 out.writeBytes(request[2] + " 404 Not found\r\n");
@@ -324,11 +378,25 @@ class TCPServer
             out.writeBytes("Content-Length: " + body.length() + "\r\n");
             out.writeBytes("Date: " + date + "\r\n");
             out.writeBytes("\r\n");
-
-
+            System.out.println("Successful");
         };
 
+
+        /**
+         * This method will be called when the client performs a DELETE request.
+         * It wiill if the client did not make any errors while making this request, and if the
+         * client has made errors, it will write the correct error message to the user.
+         * If no errors were made, the correct page will be deleted and a header
+         * will be written out to the user.
+         * @param in
+         * @param out
+         * @param request
+         * @param date
+         * @throws IOException
+         */
         private  void delete(BufferedReader in, DataOutputStream out, String[] request, String date) throws  IOException {
+            System.out.println("DELETE Request happened");
+            System.out.println("Waiting...");
             //Check if file already exists
             File file = new File("src" + request[1]);
 
@@ -358,9 +426,15 @@ class TCPServer
                 out.writeBytes(request[2] + "403 Forbidden\r\n");
                 out.writeBytes("\r\n");
             }
+            System.out.println("Succesful");
         };
 
-
+        /**
+         * This method extracts a number from a string if there is one
+         * and returns the integer.
+         * @param str
+         * @return
+         */
         public static int extractNumber(final String str) {
 
             StringBuilder sb = new StringBuilder();
@@ -377,11 +451,7 @@ class TCPServer
             return Integer.parseInt(sb.toString());
         }
 
-        public static String getFileExtension(String fullName) {
-            String fileName = new File(fullName).getName();
-            int dotIndex = fileName.lastIndexOf('.');
-            return (dotIndex == -1) ? "" : fileName.substring(dotIndex + 1);
-        }
+
 
 
     }

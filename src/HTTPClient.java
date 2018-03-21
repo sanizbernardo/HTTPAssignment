@@ -124,7 +124,7 @@ class HTTPClient {
                             Delete(outToServer, resource);
                             break;
                         default:
-                            break;
+                            continue;
                     }
 
 
@@ -143,7 +143,7 @@ class HTTPClient {
                         htmlText = searchForHtml(new byte[100],inputStream);
                     }
                     else if (HTTPCommand.equals("PUT") || HTTPCommand.equals("POST")) {}
-                    else if(!HTTPCommand.equals("HEAD") && !HTTPCommand.equals("DELETE") && !isImage(getFileExtension(resource))) {
+                    else if(!HTTPCommand.equals("HEAD") && !HTTPCommand.equals("DELETE")) {
                         htmlText = byteToString(bytes, inputStream, contentLen);
                     }
 
@@ -159,10 +159,12 @@ class HTTPClient {
                     //For the title part it looks for the title tags and remembers the start and end index of the title.
                     //For the body part it works the same as the title part.
                     int titleStart = 0, titleEnd = 0, bodyStart = 0, bodyEnd = 0;
-                    titleStart = findBeginEndIndex(htmlText, "title>", "/title>")[0];
-                    titleEnd = findBeginEndIndex(htmlText, "title>", "/title>")[1];
-                    bodyStart = findBeginEndIndex(htmlText, "body>", "/body>")[0];
-                    bodyEnd = findBeginEndIndex(htmlText, "body>", "/body>")[1];
+                    int [] titleIndex = findBeginEndIndex(htmlText, "title>", "/title>");
+                    int [] bodyIndex = findBeginEndIndex(htmlText, "body>", "/body>");
+                    titleStart = titleIndex[0];
+                    titleEnd = titleIndex[1];
+                    bodyStart = bodyIndex[0];
+                    bodyEnd = bodyIndex[1];
 
                     /*
                      * Convert bytes to images
@@ -171,6 +173,7 @@ class HTTPClient {
                     // If the method above has found any images, loop through all the found images and
                     // call up getImage method on every image
                     // to convert the bytes of the images in inputStream into files.
+                    System.out.println("Image: "+getImages(htmlText));
                     if (getImages(htmlText).size() != 0) {
                         for (String img : getImages(htmlText)) {
                             if (img.length() != 0)
@@ -197,12 +200,16 @@ class HTTPClient {
                     }
 
                     //Check if the user wants to do another request
-                    System.out.println("Type your next request or type \"STOP\" if you want to close the client.");
-                    request = scanner.nextLine();
-                    if (request.equals("STOP")) {
+                    if (uri.toString().contains("tcpipguide.com"))
                         break;
+                    else {
+                        System.out.println("Type your next request or type \"STOP\" if you want to close the client.");
+                        request = scanner.nextLine();
+                        if (request.equals("STOP")) {
+                            break;
+                        }
+                        counter++;
                     }
-                    counter ++;
 
 
                 } catch (IOException e) {
@@ -265,16 +272,20 @@ class HTTPClient {
          */
         void PutOrPost(String putOrPost,String path, DataOutputStream outToServer) throws IOException {
             Scanner scanner = new Scanner(System.in);
+            StringBuilder stringB = new StringBuilder();
+            stringB.append("<p>");
+            String line = "";
+            System.out.println("Press provide body for your "+putOrPost+" request, to finish send ENTER as line: ");
+            while (!(line = scanner.nextLine()).equals("")) {
+                System.out.println(line.equals("\n"));
+                stringB.append(line);
+            }
+            System.out.println("test");
+            stringB.append("</p>");
+            String data = stringB.toString();
             outToServer.writeBytes(putOrPost +" "+path+" HTTP/1.1\r\n");
-            System.out.print("Host: ");
-            outToServer.writeBytes("Host: "+scanner.nextLine()+"\r\n");
-            System.out.print("Content-type: ");
-            outToServer.writeBytes("Content-type: "+scanner.nextLine()+"\r\n");
-            System.out.print("Content-length: ");
-            outToServer.writeBytes("Content-length: "+scanner.nextLine()+"\r\n");
-            outToServer.writeBytes("\r\n");
-            System.out.println("Please input the content: ");
-            outToServer.writeBytes(scanner.nextLine()+"\r\n");
+            outToServer.writeBytes("Host: localhost \r\n");
+            outToServer.writeBytes(data+"\r\n\r\n");
             outToServer.flush();
         }
 
@@ -418,7 +429,6 @@ class HTTPClient {
          */
         void getImage(String path,String image, String host, InputStream inputStream,DataOutputStream outToServer) throws IOException {
             if (image.charAt(0) == '/') {
-                //TODO nachecken
                 image = image.substring(1);
             }
             // Initialize some variables that will be needed in this method
@@ -430,8 +440,13 @@ class HTTPClient {
             String line = splitUpHeaderRest(bytes,inputStream);
             // This part searches for the content length in the header.
             int contentLen = findContentLen(line);
+
             // If the image from the server is stored in another folder than the source, a new directory will be created inside source.
-            FileOutputStream fos = new FileOutputStream("src/"+path+image);
+            if (detectPathImg(image) != null) {
+                new File(detectPathImg("src/"+image)).mkdirs();
+            }
+            // If the image from the server is stored in another folder than the source, a new directory will be created inside source.
+            FileOutputStream fos = new FileOutputStream("src/"+image);
             byte [] htmlByte = new byte[4096];
             int chunk =inputStream.read(htmlByte);
 
@@ -480,7 +495,7 @@ class HTTPClient {
          * @return
          */
         String detectPathImg(String image) {
-            /*int i =0;
+            int i =0;
             if (image.contains("/")) {
                 for (i = image.length()-1;i >-1;i--) {
                     if (image.charAt(i) == '/')
@@ -492,10 +507,7 @@ class HTTPClient {
             else {
                 return image.substring(0, i + 1);
 
-            }*/
-
-            int slashIndex = image.lastIndexOf('/');
-            return (slashIndex == -1) ? "" : image.substring(slashIndex + 1);
+            }
         }
 
         /**
