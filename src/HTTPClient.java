@@ -440,7 +440,6 @@ class HTTPClient {
             int j = 0;
             while (chunk != -1)  {
                 for (byte b: htmlByte) {
-                    System.out.println("Byte: "+b);
                 }
                 fos.write(htmlByte,0,chunk);
                 j+= chunk;
@@ -449,7 +448,6 @@ class HTTPClient {
                 }
                 chunk = inputStream.read(htmlByte);
             }
-            System.out.println("J: "+j);
             outToServer.flush();
 
 
